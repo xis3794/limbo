@@ -57,7 +57,8 @@ endif
 
 ## newer versions of QEMU link slirp as a lib
 ifeq ($(USE_SLIRP_LIB),true)
-	slirplib=../../qemu/slirp/libslirp.a
+	# QEMU 5.1 keeps slirp under net/slirp/
+	slirplib=../../qemu/net/slirp/libslirp.a
 	RELINK_LIBSLIRP=$(OBJ_COPY) $(RELINK_PARAMS) $(slirplib)
 	RELINK_LIBSLIRP_2=$(OBJ_COPY) $(RELINK_PARAMS_2) $(slirplib)
 endif

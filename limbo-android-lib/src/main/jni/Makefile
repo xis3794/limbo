@@ -131,6 +131,11 @@ else
     LIBPIXMAN_DEBUG =
 endif
 
+# QEMU 8.x (meson): make our hand-built pkg-config files visible
+ifeq ($(USE_QEMU_VERSION),8.0.5)
+export PKG_CONFIG_PATH := $(LIMBO_JNI_ROOT)/pc
+endif
+
 export
 
 .PHONY: limbo clean distclean clean-ndk createdirs clean-ffi clean-glib clean-qemu clean-pixman
@@ -181,6 +186,8 @@ config-glib: ndk
 	-L${LIMBO_JNI_ROOT}/../obj/local/$(APP_ABI) -lc -lcompat-musl -llog -lcompat-limbo " \
 	LIBFFI_CFLAGS="-I${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/include " \
 	LIBFFI_LIBS="${LIMBO_JNI_ROOT}/../obj/local/$(APP_ABI)/libffi.a"
+	# generate pkg-config files for QEMU 8.x (meson) build
+	bash $(LIMBO_PRJ_ROOT)/scripts/gen_pc_files.sh $(LIMBO_JNI_ROOT) $(APP_ABI)
 
 glib: ndk
 	cd $(LIMBO_JNI_ROOT)/glib/glib && $(MAKE) -j $(BUILD_THREADS) CFLAGS="$(ARCH_CFLAGS) \
@@ -195,6 +202,18 @@ glib: ndk
 	LIBFFI_CFLAGS="-I${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/include " \
 	LIBFFI_LIBS="${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/.libs/libffi.a "
 	$(INSTALL_GLIB_LIBS)
+
+config-libslirp:
+	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ]; then \
+		echo "Configuring libslirp for QEMU 8.x"; \
+	fi
+
+libslirp:
+	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ]; then \
+		bash $(LIMBO_PRJ_ROOT)/scripts/build_libslirp.sh $(LIMBO_JNI_ROOT) $(NDK_ROOT) $(APP_ABI); \
+	else \
+		echo "libslirp not needed for QEMU $(USE_QEMU_VERSION)"; \
+	fi
 
 clean-glib:
 	-find $(LIMBO_JNI_ROOT)/glib/ -name "*.lo" -exec rm -rf {} \;
@@ -301,6 +320,8 @@ limbo:
 	make ndk
 	make config-deps
 	make deps
+	make config-libslirp
+	make libslirp
 	make config-qemu
 	make qemu
 	make install

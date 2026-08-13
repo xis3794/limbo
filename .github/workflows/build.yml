@@ -108,13 +108,16 @@ jobs:
           if [ "$QEMU_VER" = "8.0.5" ]; then
             echo "=== Running QEMU 8.0.5 Limbo/Android adaptation ==="
             python3 "$GITHUB_WORKSPACE/scripts/fix_qemu805.py" "$PWD"
-            echo "=== Building libslirp 4.7.0 (external dep of QEMU 8.x) ==="
+            echo "=== Downloading libslirp 4.7.0 (built later inside make limbo) ==="
             wget -q https://gitlab.freedesktop.org/slirp/libslirp/-/archive/v4.7.0/libslirp-v4.7.0.tar.gz
             tar xzf libslirp-v4.7.0.tar.gz && mv libslirp-v4.7.0 libslirp && rm libslirp-v4.7.0.tar.gz
-            bash "$GITHUB_WORKSPACE/scripts/gen_pc_files.sh" "$PWD" arm64-v8a
-            bash "$GITHUB_WORKSPACE/scripts/build_libslirp.sh" "$PWD" "$NDK_ROOT" arm64-v8a
           else
             cd qemu && patch -p1 < ../patches/qemu-$QEMU_VER.patch && cd ..
+            if [ "$QEMU_VER" = "5.1.0" ]; then
+              # bionic has no malloc_trim: stub it out in rcu.c
+              sed -i 's/^#ifdef CONFIG_MALLOC_TRIM/#if 0 \/* CONFIG_MALLOC_TRIM *\//' qemu/util/rcu.c
+              echo "rcu.c malloc_trim disabled for Android"
+            fi
           fi
           cd glib && patch -p1 < ../patches/glib-2.56.1.patch && cd ..
           cd SDL2 && patch -p1 < ../patches/sdl2-2.0.8.patch && cd ..
