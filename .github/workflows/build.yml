@@ -111,26 +111,8 @@ jobs:
             echo "=== Building libslirp 4.7.0 (external dep of QEMU 8.x) ==="
             wget -q https://gitlab.freedesktop.org/slirp/libslirp/-/archive/v4.7.0/libslirp-v4.7.0.tar.gz
             tar xzf libslirp-v4.7.0.tar.gz && mv libslirp-v4.7.0 libslirp && rm libslirp-v4.7.0.tar.gz
-            mkdir -p obj/local/arm64-v8a
-            cat > slirp-cross.txt <<EOF
-            [binaries]
-            c = '$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang'
-            ar = '$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar'
-            strip = '$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip'
-            pkgconfig = 'pkg-config'
-            [host_machine]
-            system = 'linux'
-            cpu_family = 'aarch64'
-            cpu = 'arm64'
-            endian = 'little'
-            EOF
             bash "$GITHUB_WORKSPACE/scripts/gen_pc_files.sh" "$PWD" arm64-v8a
-            export PKG_CONFIG_PATH="$PWD/pc"
-            meson setup libslirp/build libslirp --cross-file slirp-cross.txt \
-              --default-library=static -Dtests=false -Dexamples=false
-            ninja -C libslirp/build
-            cp -f libslirp/build/libslirp.a obj/local/arm64-v8a/
-            echo "libslirp built OK"
+            bash "$GITHUB_WORKSPACE/scripts/build_libslirp.sh" "$PWD" "$NDK_ROOT" arm64-v8a
           else
             cd qemu && patch -p1 < ../patches/qemu-$QEMU_VER.patch && cd ..
           fi
