@@ -26,3 +26,6 @@ MISC += --disable-xfsctl
 VNC += --disable-vnc-jpeg
 VNC += --disable-vnc-png
 
+# vhost options still supported by 5.1 configure
+VHOST += --disable-vhost-net --disable-vhost-scsi
+

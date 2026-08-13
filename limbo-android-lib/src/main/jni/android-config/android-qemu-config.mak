@@ -96,7 +96,7 @@ SMARTCARD =	--disable-smartcard
 
 #FDT is needed for system emulation
 #FDT =	--disable-fdt
-FDT =	--enable-fdt
+FDT ?= --enable-fdt
 FDT_INC = -I$(LIMBO_JNI_ROOT)/qemu/dtc/libfdt
 
 #Disable nptl
@@ -130,8 +130,8 @@ MISC += $(SSH2)
 #NUMA
 NUMA = --disable-numa
 
-#VHOST
-VHOST = --disable-vhost-net --disable-vhost-scsi
+#VHOST (options removed in QEMU 8.x; see android-qemu-config-5.1.0.mak)
+VHOST =
 
 #VIRT
 VIRT = --disable-virtfs
