@@ -7,6 +7,8 @@ ifeq ($(USE_QEMU_VERSION),2.9.1)
 include $(QEMU_CONFIG_DIR)/android-qemu-config-2.9.1.mak
 else ifeq ($(USE_QEMU_VERSION),5.1.0)
 include $(QEMU_CONFIG_DIR)/android-qemu-config-5.1.0.mak
+else ifeq ($(USE_QEMU_VERSION),8.0.5)
+include $(QEMU_CONFIG_DIR)/android-qemu-config-8.0.5.mak
 else
 $(error Unsupported QEMU version = $(USE_QEMU_VERSION))
 endif
@@ -103,25 +105,24 @@ FDT_INC = -I$(LIMBO_JNI_ROOT)/qemu/dtc/libfdt
 #NPTL += --disable-nptl 
 
 #For 2.3.0
-#Misc
+#Misc (options supported by BOTH 5.1.0 and 8.0.5)
 MISC += --disable-tools --disable-libnfs --disable-tpm
 MISC +=  --disable-qom-cast-debug
 MISC += --disable-libnfs --disable-libiscsi --disable-docs
 MISC += --disable-rdma --disable-brlapi --disable-curl
-MISC += --disable-vde --disable-netmap --disable-cap-ng --disable-zlib-test
-MISC += --disable-attr --disable-guest-agent --disable-pie
-MISC += --disable-rbd --disable-xfsctl  --disable-lzo  --disable-snappy 
+MISC += --disable-vde --disable-netmap --disable-cap-ng
+MISC += --disable-attr --disable-pie
+MISC += --disable-rbd --disable-lzo  --disable-snappy 
 MISC += --disable-seccomp --disable-bzip2 --disable-glusterfs 
 MISC += --disable-vte
 MISC += --disable-opengl
-MISC += --disable-blobs
 MISC += --disable-werror
 MISC += --disable-gnutls
 MISC += --disable-nettle
 MISC += --disable-user
 MISC += $(SSH2)
 
-#Stack protector, this doesn't make any difference since we override in android-generic.mak
+# Stack protector, this doesn't make any difference since we override in android-generic.mak
 #MISC += --enable-stack-protector
 #MISC += --disable-stack-protector
 

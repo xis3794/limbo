@@ -56,6 +56,9 @@ LIMBO_APP_ARM=$(LIMBO_PRJ_ROOT)/limbo-android-arm/src/main
 LIMBO_APP_PPC=$(LIMBO_PRJ_ROOT)/limbo-android-ppc/src/main
 LIMBO_APP_SPARC=$(LIMBO_PRJ_ROOT)/limbo-android-sparc/src/main
 
+# short guest name, e.g. x86_64-softmmu -> x86_64
+GUEST_SHORT=$(subst -softmmu,,$(BUILD_GUEST))
+
 SYNC_LIBS_X86=rsync -av --include='libqemu-system-x86*.so' \
     --include='gdbserver' --include='gdb.setup' \
     --include='*/' --exclude='*' \
@@ -253,6 +256,18 @@ deps: ndk ffi glib pixman
 
 _build-qemu: ndk 
 	make _qemu
+	# QEMU 8.x: meson/ninja outputs the emulator as a shared lib into qemu/build/
+	# copy it into the NDK obj dir (and redefine file IO syms for Android SAF)
+	@if [ -f qemu/build/qemu-system-$(GUEST_SHORT).so ]; then \
+		cp -f qemu/build/qemu-system-$(GUEST_SHORT).so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so; \
+		$(OBJ_COPY) --redefine-sym open=android_open \
+			--redefine-sym fopen=android_fopen \
+			--redefine-sym close=android_close \
+			--redefine-sym stat=android_stat \
+			--redefine-sym mkstemp=android_mkstemp \
+			$(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so; \
+		echo "[OK] QEMU8.x .so copied & syms redefined"; \
+	fi
 	$(INSTALL_LIBS)
 	$(RENAME_TUNCTL)
 	$(RENAME_PARPROUTED)

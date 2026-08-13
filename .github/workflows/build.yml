@@ -48,7 +48,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y make autoconf automake git python3 libtool-bin \
-            pkg-config flex bison gettext texinfo rsync gcc g++ unzip zip wget curl
+            pkg-config flex bison gettext texinfo rsync gcc g++ unzip zip wget curl \
+            meson ninja-build
 
       - name: Set up JDK 11 (for Gradle build)
         id: jdk11
@@ -101,16 +102,37 @@ jobs:
           wget -q https://www.libsdl.org/release/SDL2-2.0.8.tar.gz
           tar xzf SDL2-2.0.8.tar.gz && mv SDL2-2.0.8 SDL2 && rm SDL2-2.0.8.tar.gz
 
-      - name: Apply patches
+      - name: Apply patches & prepare QEMU 8.x
         run: |
           cd limbo-android-lib/src/main/jni
-          if [ -f patches/qemu-$QEMU_VER.patch ]; then
-            cd qemu && patch -p1 < ../patches/qemu-$QEMU_VER.patch && cd ..
+          if [ "$QEMU_VER" = "8.0.5" ]; then
+            echo "=== Running QEMU 8.0.5 Limbo/Android adaptation ==="
+            python3 "$GITHUB_WORKSPACE/scripts/fix_qemu805.py" "$PWD"
+            echo "=== Building libslirp 4.7.0 (external dep of QEMU 8.x) ==="
+            wget -q https://gitlab.freedesktop.org/slirp/libslirp/-/archive/v4.7.0/libslirp-v4.7.0.tar.gz
+            tar xzf libslirp-v4.7.0.tar.gz && mv libslirp-v4.7.0 libslirp && rm libslirp-v4.7.0.tar.gz
+            mkdir -p obj/local/arm64-v8a
+            cat > slirp-cross.txt <<EOF
+            [binaries]
+            c = '$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang'
+            ar = '$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar'
+            strip = '$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip'
+            pkgconfig = 'pkg-config'
+            [host_machine]
+            system = 'linux'
+            cpu_family = 'aarch64'
+            cpu = 'arm64'
+            endian = 'little'
+            EOF
+            bash "$GITHUB_WORKSPACE/scripts/gen_pc_files.sh" "$PWD" arm64-v8a
+            export PKG_CONFIG_PATH="$PWD/pc"
+            meson setup libslirp/build libslirp --cross-file slirp-cross.txt \
+              --default-library=static -Dtests=false -Dexamples=false
+            ninja -C libslirp/build
+            cp -f libslirp/build/libslirp.a obj/local/arm64-v8a/
+            echo "libslirp built OK"
           else
-            echo "No qemu-$QEMU_VER.patch found, applying compat patch if exists"
-            if [ -f patches/qemu-$QEMU_VER-compat.patch ]; then
-              cd qemu && patch -p1 < ../patches/qemu-$QEMU_VER-compat.patch && cd ..
-            fi
+            cd qemu && patch -p1 < ../patches/qemu-$QEMU_VER.patch && cd ..
           fi
           cd glib && patch -p1 < ../patches/glib-2.56.1.patch && cd ..
           cd SDL2 && patch -p1 < ../patches/sdl2-2.0.8.patch && cd ..
@@ -121,6 +143,9 @@ jobs:
           export NDK_ROOT="$NDK_ROOT"
           export BUILD_HOST="$BUILD_HOST"
           export BUILD_GUEST="$BUILD_GUEST"
+          if [ "$QEMU_VER" = "8.0.5" ]; then
+            export PKG_CONFIG_PATH="$PWD/pc"
+          fi
           make limbo
 
       - name: Build APK with Gradle 7.0.2

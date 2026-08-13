@@ -14,3 +14,12 @@ USE_SDL_ABI ?= false
 MISC += --disable-capstone
 MISC += --disable-malloc-trim
 
+# 5.1-only options (removed from QEMU 8.x, kept here for 5.1.0 builds)
+MISC += --disable-zlib-test
+MISC += --disable-blobs
+MISC += --disable-sparse
+MISC += --disable-guest-agent
+MISC += --disable-vnc-sasl
+MISC += --disable-vhost-net --disable-vhost-scsi
+MISC += --disable-xfsctl
+
