@@ -49,7 +49,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y make autoconf automake git python3 libtool-bin \
             pkg-config flex bison gettext texinfo rsync gcc g++ unzip zip wget curl \
-            meson ninja-build
+            meson ninja-build gtk-doc-tools
 
       - name: Set up JDK 11 (for Gradle build)
         id: jdk11
