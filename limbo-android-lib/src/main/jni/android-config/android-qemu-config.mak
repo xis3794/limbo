@@ -78,11 +78,9 @@ DISPLAY = --disable-curses --disable-cocoa --disable-gtk
 #VNC 
 VNC +=  --enable-vnc
 #VNC += --enable-vnc-jpeg
-VNC += --disable-vnc-jpeg
-#VNC +=--enable-vnc-png
-VNC += --disable-vnc-png
-
-VNC += --disable-vnc-sasl
+# VNC jpeg/png/sasl options were removed in QEMU 8.x, see android-qemu-config-5.1.0.mak
+#VNC += --enable-vnc-png
+#VNC += --disable-vnc-sasl
 
 
 #VNC THREAD (DONT USE FOR 2.3.0+)

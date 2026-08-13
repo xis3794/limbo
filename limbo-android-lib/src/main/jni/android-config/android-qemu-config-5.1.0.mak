@@ -22,4 +22,7 @@ MISC += --disable-guest-agent
 MISC += --disable-vnc-sasl
 MISC += --disable-vhost-net --disable-vhost-scsi
 MISC += --disable-xfsctl
+# VNC codec options still supported by 5.1 configure
+VNC += --disable-vnc-jpeg
+VNC += --disable-vnc-png
 

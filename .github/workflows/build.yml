@@ -128,6 +128,7 @@ jobs:
           export NDK_ROOT="$NDK_ROOT"
           export BUILD_HOST="$BUILD_HOST"
           export BUILD_GUEST="$BUILD_GUEST"
+          export USE_QEMU_VERSION="$QEMU_VER"
           if [ "$QEMU_VER" = "8.0.5" ]; then
             export PKG_CONFIG_PATH="$PWD/pc"
           fi
