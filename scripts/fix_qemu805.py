@@ -114,6 +114,18 @@ write('meson.build', meson)
 # 2. configure: tolerate missing pkg-config detection of our hand-built libs
 # ---------------------------------------------------------------------------
 conf = read('configure')
+# pkg-config probe: cross_prefix (aarch64-linux-android-) has no pkg-config in NDK
+old_pkg_err = """if ! has "$pkg_config_exe"; then
+  error_exit "pkg-config binary '$pkg_config_exe' not found"
+fi"""
+new_pkg_err = """if ! has "$pkg_config_exe"; then
+  echo "Limbo: ignoring missing pkg-config binary '$pkg_config_exe'"
+fi"""
+if old_pkg_err in conf:
+    conf = conf.replace(old_pkg_err, new_pkg_err, 1)
+    log('[OK] configure: pkg-config binary check bypassed')
+else:
+    log('[SKIP] configure: pkg-config binary check pattern differs')
 # glib probe: if pkg-config fails, do not hard-fail; QEMU will get flags via
 # --extra-cflags/--extra-ldflags and the generated .pc files.
 old_glib_err = """        error_exit "glib-$glib_req_ver $i is required to compile QEMU"

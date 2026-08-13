@@ -133,6 +133,7 @@ endif
 
 # QEMU 8.x (meson): make our hand-built pkg-config files visible
 ifeq ($(USE_QEMU_VERSION),8.0.5)
+export PKG_CONFIG := pkg-config
 export PKG_CONFIG_PATH := $(LIMBO_JNI_ROOT)/pc
 endif
 
