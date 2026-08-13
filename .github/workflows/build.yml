@@ -1,0 +1,126 @@
+name: Build Limbo APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      qemu_version:
+        description: 'QEMU version to build'
+        required: true
+        default: '5.1.0'
+        type: choice
+        options:
+          - '5.1.0'
+          - '8.0.5'
+      build_host:
+        description: 'Target device ABI (arm64-v8a recommended)'
+        required: true
+        default: 'arm64-v8a'
+        type: choice
+        options:
+          - 'arm64-v8a'
+          - 'armeabi-v7a'
+      build_guest:
+        description: 'Guest architecture'
+        required: true
+        default: 'x86_64-softmmu'
+        type: choice
+        options:
+          - 'x86_64-softmmu'
+          - 'aarch64-softmmu'
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      QEMU_VER: ${{ github.event.inputs.qemu_version || '5.1.0' }}
+      BUILD_HOST: ${{ github.event.inputs.build_host || 'arm64-v8a' }}
+      BUILD_GUEST: ${{ github.event.inputs.build_guest || 'x86_64-softmmu' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make autoconf automake git python3 libtool-bin \
+            pkg-config flex bison gettext texinfo rsync gcc g++ unzip zip wget curl
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Set up Android SDK (platform 29 + build-tools 29.0.3)
+        run: |
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q commandlinetools-linux-11076708_latest.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
+          mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platforms;android-29" "build-tools;29.0.3"
+
+      - name: Set up NDK r23b
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r23b-linux.zip
+          unzip -q android-ndk-r23b-linux.zip
+          echo "NDK_ROOT=$GITHUB_WORKSPACE/android-ndk-r23b" >> $GITHUB_ENV
+
+      - name: Download QEMU and dependency sources
+        run: |
+          cd limbo-android-lib/src/main/jni
+          # QEMU
+          wget -q https://download.qemu.org/qemu-$QEMU_VER.tar.xz
+          tar xf qemu-$QEMU_VER.tar.xz && mv qemu-$QEMU_VER qemu && rm qemu-$QEMU_VER.tar.xz
+          # glib 2.56.1
+          wget -q https://download.gnome.org/sources/glib/2.56/glib-2.56.1.tar.xz
+          tar xf glib-2.56.1.tar.xz && mv glib-2.56.1 glib && rm glib-2.56.1.tar.xz
+          # libffi 3.3
+          wget -q https://github.com/libffi/libffi/releases/download/v3.3/libffi-3.3.tar.gz
+          tar xzf libffi-3.3.tar.gz && mv libffi-3.3 libffi && rm libffi-3.3.tar.gz
+          # pixman 0.40.0
+          wget -q https://www.cairographics.org/releases/pixman-0.40.0.tar.gz
+          tar xzf pixman-0.40.0.tar.gz && mv pixman-0.40.0 pixman && rm pixman-0.40.0.tar.gz
+          # SDL2 2.0.8
+          wget -q https://www.libsdl.org/release/SDL2-2.0.8.tar.gz
+          tar xzf SDL2-2.0.8.tar.gz && mv SDL2-2.0.8 SDL2 && rm SDL2-2.0.8.tar.gz
+
+      - name: Apply patches
+        run: |
+          cd limbo-android-lib/src/main/jni
+          if [ -f patches/qemu-$QEMU_VER.patch ]; then
+            cd qemu && patch -p1 < ../patches/qemu-$QEMU_VER.patch && cd ..
+          else
+            echo "No qemu-$QEMU_VER.patch found, applying compat patch if exists"
+            if [ -f patches/qemu-$QEMU_VER-compat.patch ]; then
+              cd qemu && patch -p1 < ../patches/qemu-$QEMU_VER-compat.patch && cd ..
+            fi
+          fi
+          cd glib && patch -p1 < ../patches/glib-2.56.1.patch && cd ..
+          cd SDL2 && patch -p1 < ../patches/sdl2-2.0.8.patch && cd ..
+
+      - name: Build native libraries (make limbo)
+        run: |
+          cd limbo-android-lib/src/main/jni
+          export NDK_ROOT="$NDK_ROOT"
+          export BUILD_HOST="$BUILD_HOST"
+          export BUILD_GUEST="$BUILD_GUEST"
+          make limbo
+
+      - name: Build APK with Gradle 7.0.2
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-7.0.2-bin.zip
+          unzip -q gradle-7.0.2-bin.zip
+          ./gradle-7.0.2/bin/gradle :limbo-android-x86:assembleRelease --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: limbo-x86-${{ env.QEMU_VER }}-${{ env.BUILD_HOST }}
+          path: limbo-android-x86/build/outputs/apk/release/*.apk
