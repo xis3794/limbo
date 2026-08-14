@@ -11,3 +11,9 @@ MISC += --disable-capstone
 
 # 8.x: FDT needed by all softmmu targets; dtc/ submodule is downloaded in CI
 FDT ?= --enable-fdt
+
+# 8.x: zstd not available in NDK
+MISC += --disable-zstd
+
+# 8.x: libudev not available in NDK
+MISC += --disable-libudev
