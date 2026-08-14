@@ -92,6 +92,14 @@ if old_exe in meson:
 else:
     log('[FAIL] meson.build: executable block not found')
 
+# Disable tests build: unit tests are executables that fail linking on Android
+# (major/minor macros, getifaddrs etc. not available in bionic API 21)
+if "subdir('tests')" in meson:
+    meson = meson.replace("subdir('tests')", "# Limbo: disabled tests\n#subdir('tests')", 1)
+    log('[OK] meson.build: tests subdir disabled')
+else:
+    log('[SKIP] meson.build: tests subdir not found')
+
 # zlib: bionic provides libz, no pkg-config .pc needed -> use find_library
 old_z = "zlib = dependency('zlib', required: true, kwargs: static_kwargs)"
 new_z = "zlib = cc.find_library('z', required: true)"
