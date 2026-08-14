@@ -145,7 +145,7 @@ endif
 
 export
 
-.PHONY: limbo clean distclean clean-ndk createdirs clean-ffi clean-glib clean-qemu clean-pixman
+.PHONY: limbo clean distclean clean-ndk createdirs clean-ffi clean-glib clean-qemu clean-pixman config-libslirp libslirp
 
 default: limbo
 	
