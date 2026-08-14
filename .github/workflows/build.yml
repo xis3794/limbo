@@ -101,6 +101,12 @@ jobs:
           # SDL2 2.0.8
           wget -q https://www.libsdl.org/release/SDL2-2.0.8.tar.gz
           tar xzf SDL2-2.0.8.tar.gz && mv SDL2-2.0.8 SDL2 && rm SDL2-2.0.8.tar.gz
+          # dtc (libfdt) — QEMU 8.x requires it; tarball lacks the submodule
+          if [ "$QEMU_VER" = "8.0.5" ]; then
+            wget -q https://gitlab.com/qemu-project/dtc/-/archive/v1.7.0/dtc-v1.7.0.tar.gz
+            tar xzf dtc-v1.7.0.tar.gz && mv dtc-v1.7.0 qemu/dtc && rm dtc-v1.7.0.tar.gz
+            echo "dtc/libfdt v1.7.0 installed as qemu/dtc/"
+          fi
 
       - name: Apply patches & prepare QEMU 8.x
         run: |
