@@ -102,11 +102,22 @@ else:
     log('[SKIP] meson.build: zlib pattern differs')
 
 # Force-disable Android-incompatible syscalls (same policy as Limbo 5.1 patch)
+# Also force CONFIG_IOVEC so QEMU doesn't redefine struct iovec (bionic has it)
 for name in ['CONFIG_SIGNALFD', 'CONFIG_MEMFD', 'CONFIG_GETRANDOM',
              'HAVE_STRCHRNUL', 'HAVE_COPY_FILE_RANGE', 'CONFIG_PREADV']:
     meson, n = force_config_false(meson, name)
     log('[OK] meson.build: %s = false (x%d)' % (name, n) if n else
         '[WARN] meson.build: %s not found' % name)
+
+# bionic already provides struct iovec; tell QEMU not to redefine it
+# Pattern: config_host_data.set('CONFIG_IOVEC',\n  cc.has_type('struct iovec', ...))
+import re as _re
+_iovec_pat = _re.compile(r"config_host_data\.set\('CONFIG_IOVEC',\s*cc\.has_type\([^)]+\)\)", _re.S)
+meson, _n = _iovec_pat.subn("config_host_data.set('CONFIG_IOVEC', true)", meson)
+if _n > 0:
+    log('[OK] meson.build: CONFIG_IOVEC = true (bionic provides iovec)')
+else:
+    log('[WARN] meson.build: CONFIG_IOVEC pattern not found')
 write('meson.build', meson)
 
 # FDT: QEMU 8.x requires libfdt for most softmmu targets including x86_64.
