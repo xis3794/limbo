@@ -24,3 +24,7 @@ MISC += --disable-vhost-crypto
 MISC += --disable-vhost-vdpa
 MISC += --disable-vhost-kernel
 MISC += --disable-vhost-net
+
+# 8.x: disable tools and guest-agent (executables that fail linking on Android)
+MISC += --disable-tools
+MISC += --disable-guest-agent
