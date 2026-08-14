@@ -132,9 +132,15 @@ else
 endif
 
 # QEMU 8.x (meson): make our hand-built pkg-config files visible
+# Also export NDK tool names so QEMU configure/meson finds them
+# (configure uses ${NM-${cross_prefix}nm} pattern: env var wins if set)
 ifeq ($(USE_QEMU_VERSION),8.0.5)
 export PKG_CONFIG := pkg-config
 export PKG_CONFIG_PATH := $(LIMBO_JNI_ROOT)/pc
+export NM
+export AR
+export STRIP
+export OBJ_COPY
 endif
 
 export
