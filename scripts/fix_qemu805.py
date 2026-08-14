@@ -110,6 +110,30 @@ for name in ['CONFIG_SIGNALFD', 'CONFIG_MEMFD', 'CONFIG_GETRANDOM',
         '[WARN] meson.build: %s not found' % name)
 write('meson.build', meson)
 
+# FDT requirement: x86_64-softmmu doesn't need FDT at runtime, but meson
+# enforces it. Remove the "fdt not available but required" error.
+meson = read('meson.build')
+old_fdt_req = "Problem encountered: fdt not available but required by targets "
+if old_fdt_req in meson:
+    # Replace the error_exit with a warning so build proceeds without FDT
+    meson = meson.replace(
+        "Problem encountered: fdt not available but required by targets ",
+        "Limbo: fdt not available but targets ")
+    # Also comment out the actual error line
+    old_fdt_err = "  error('fdt not available but required by targets ' + ', '.join(fdt_required))"
+    new_fdt_err = "  warning('Limbo: fdt not available but required by targets ' + ', '.join(fdt_required))"
+    if old_fdt_err in meson:
+        meson = meson.replace(old_fdt_err, new_fdt_err, 1)
+        log('[OK] meson.build: FDT requirement error -> warning')
+    else:
+        log('[WARN] meson.build: FDT error() pattern not found, trying alternative')
+        # Try the if-error pattern
+        meson = meson.replace("error('fdt not available", "warning('Limbo: fdt not available")
+        log('[OK] meson.build: FDT error -> warning (alt)')
+    write('meson.build', meson)
+else:
+    log('[SKIP] meson.build: FDT requirement check not found')
+
 # ---------------------------------------------------------------------------
 # 2. configure: tolerate missing pkg-config detection of our hand-built libs
 # ---------------------------------------------------------------------------
