@@ -57,7 +57,7 @@ EOF
 export PKG_CONFIG_PATH="$JNI/pc"
 cd "$JNI"
 meson setup libslirp/build libslirp --cross-file slirp-cross.txt --default-library=static
-ninja -C libslirp/build
+ninja -C libslirp/build libslirp.a
 cp -f libslirp/build/libslirp-version.h libslirp/src/
 cp -f libslirp/build/libslirp.a "$OBJ/"
 echo "[OK] libslirp built: $OBJ/libslirp.a"
