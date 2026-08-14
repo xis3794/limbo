@@ -164,6 +164,16 @@ if old_sizeof in conf:
     log('[OK] configure: sizeof(size_t) test skipped')
 else:
     log('[SKIP] configure: sizeof(size_t) pattern differs')
+
+# Force PIC for all static libraries: needed to link qemu-system-*.so
+# (meson otherwise builds non-PIC static libs for executables)
+old_pic = 'test "$werror" = yes && meson_option_add -Dwerror=true'
+new_pic = 'test "$werror" = yes && meson_option_add -Dwerror=true\n  meson_option_add -Db_staticpic=true'
+if old_pic in conf:
+    conf = conf.replace(old_pic, new_pic, 1)
+    log('[OK] configure: forced -Db_staticpic=true')
+else:
+    log('[SKIP] configure: werror/meson_option pattern differs')
 write('configure', conf)
 
 # ---------------------------------------------------------------------------
