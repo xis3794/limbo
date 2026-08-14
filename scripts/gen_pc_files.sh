@@ -70,7 +70,7 @@ cat > "$PC/slirp.pc" <<EOF
 prefix=$JNI/libslirp
 exec_prefix=\${prefix}
 libdir=$OBJ
-includedir=\${prefix}/include
+includedir=\${prefix}/src
 
 Name: slirp
 Description: libslirp (Limbo CI-built)
