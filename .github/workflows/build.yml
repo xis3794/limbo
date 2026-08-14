@@ -148,8 +148,34 @@ jobs:
           unzip -q gradle-7.0.2-bin.zip
           ./gradle-7.0.2/bin/gradle :limbo-android-x86:assembleRelease --no-daemon
 
+      - name: Sign APK with debug keystore
+        run: |
+          # Generate a debug keystore if not present
+          KEYSTORE="$HOME/.android/debug.keystore"
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$KEYSTORE" ]; then
+            keytool -genkeypair -v -keystore "$KEYSTORE" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          # Find the unsigned APK
+          APK=$(find limbo-android-x86/build/outputs/apk/release -name "*-release-unsigned.apk" | head -1)
+          if [ -z "$APK" ]; then
+            APK=$(find limbo-android-x86/build/outputs/apk/release -name "*.apk" | head -1)
+          fi
+          echo "Signing: $APK"
+          SIGNED_APK="${APK%-unsigned.apk}-signed.apk"
+          # Use apksigner from build-tools
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/29.0.3/apksigner"
+          "$APKSIGNER" sign --ks "$KEYSTORE" --ks-pass pass:android \
+            --ks-key-alias androiddebugkey --key-pass pass:android \
+            --out "$SIGNED_APK" "$APK"
+          echo "Signed APK: $SIGNED_APK"
+          ls -la "$SIGNED_APK"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: limbo-x86-${{ env.QEMU_VER }}-${{ env.BUILD_HOST }}
-          path: limbo-android-x86/build/outputs/apk/release/*.apk
+          path: limbo-android-x86/build/outputs/apk/release/*-signed.apk
