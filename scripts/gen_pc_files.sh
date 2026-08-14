@@ -71,13 +71,12 @@ prefix=$JNI/libslirp
 exec_prefix=\${prefix}
 libdir=$OBJ
 includedir=\${prefix}/src
-buildincludedir=\${prefix}/build
 
 Name: slirp
 Description: libslirp (Limbo CI-built)
 Version: 4.7.0
 Libs: -L\${libdir} -lslirp
-Cflags: -I\${includedir} -I\${buildincludedir}
+Cflags: -I\${includedir}
 EOF
 
 echo "[OK] pkg-config files generated in $PC:"
