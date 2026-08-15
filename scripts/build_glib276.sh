@@ -57,6 +57,10 @@ EOF
 
 export PKG_CONFIG_PATH="$JNI/pc"
 cd "$GLIB_SRC"
+# glib requires iconv on non-Windows; bionic has none and meson's iconv probe
+# cannot use our pkg-config entries -> relax it to optional (iconv.h comes
+# from c_args, symbols resolve at runtime from libcompat-musl.so)
+sed -i "s|^  libiconv = dependency('iconv')|  libiconv = dependency('iconv', required: false)|" "$GLIB_SRC/meson.build"
 meson setup "$GLIB_BUILD" . --cross-file "$JNI/glib-cross.txt" \
   --default-library=shared -Dprefix=/usr \
   -Dc_args="-I$JNI/compat/musl/include -Wno-unknown-warning-option" \
