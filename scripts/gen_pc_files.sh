@@ -27,7 +27,7 @@ Name: glib-2.0
 Description: GLib (Limbo self-built)
 Version: $GLIB_VERSION
 Libs: -L\${libdir} -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo -lcompat-iconv
-Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/build/glib -I\${includedir}/gmodule -I\${includedir}/io -I\${includedir}/android -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
+Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/build -I\${includedir}/build/glib -I\${includedir}/gmodule -I\${includedir}/io -I\${includedir}/android -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
 EOF
 
 # QEMU 11 requires gmodule; point it at the same glib build
@@ -41,7 +41,7 @@ Name: gmodule-export-2.0
 Description: GModule (Limbo self-built)
 Version: $GLIB_VERSION
 Libs: -L\${libdir} -lgmodule-2.0 -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo
-Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/build/glib -I\${includedir}/gmodule -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
+Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/build -I\${includedir}/build/glib -I\${includedir}/gmodule -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
 EOF
 
 cat > "$PC/gmodule-no-export-2.0.pc" <<EOF
@@ -54,7 +54,7 @@ Name: gmodule-no-export-2.0
 Description: GModule (Limbo self-built)
 Version: $GLIB_VERSION
 Libs: -L\${libdir} -lgmodule-2.0 -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo
-Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/build/glib -I\${includedir}/gmodule -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
+Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/build -I\${includedir}/build/glib -I\${includedir}/gmodule -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
 EOF
 
 cat > "$PC/gthread-2.0.pc" <<EOF
