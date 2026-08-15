@@ -252,7 +252,7 @@ int limbo_sdl_scale_hint = -1;
 write('ui/sdl2.c', sdl2)
 
 # ---------------------------------------------------------------------------
-# 5. osdep.h: Android needs linux/mman.h for some MAP_* macros
+# 7. osdep.h: Android needs linux/mman.h for some MAP_* macros
 # ---------------------------------------------------------------------------
 osdep = read('include/qemu/osdep.h')
 if '#include "qemu/compiler.h"' in osdep and '__ANDROID__' not in osdep.split('qemu/compiler.h')[1][:200]:
@@ -262,6 +262,27 @@ if '#include "qemu/compiler.h"' in osdep and '__ANDROID__' not in osdep.split('q
     log('[OK] include/qemu/osdep.h: linux/mman.h for Android')
 else:
     log('[SKIP] include/qemu/osdep.h: already patched or anchor differs')
+
+# ---------------------------------------------------------------------------
+# 7b. 9p/virtfs: bionic sys/stat.h defines st_*_nsec as macros that clash
+#     with the 9p protocol's own st_atime_nsec etc. members -> undef them.
+# ---------------------------------------------------------------------------
+_undef = ("/* Limbo: undef bionic stat macros that clash with 9p protocol */\n"
+          "#undef st_atime\n#undef st_atime_nsec\n"
+          "#undef st_mtime\n#undef st_mtime_nsec\n"
+          "#undef st_ctime\n#undef st_ctime_nsec\n")
+for _f in ['fsdev/9p-marshal.h', 'fsdev/9p-iov-marshal.c', 'fsdev/9p-marshal.c']:
+    try:
+        _c = read(_f)
+    except FileNotFoundError:
+        log('[SKIP] %s absent' % _f)
+        continue
+    if '#undef st_atime_nsec' not in _c:
+        _c = _undef + _c
+        write(_f, _c)
+        log('[OK] %s: stat macros undef' % _f)
+    else:
+        log('[SKIP] %s already patched' % _f)
 
 # ---------------------------------------------------------------------------
 # 6. Limbo UI hook symbols (5.1-era) kept for vm-executor-jni.c dlsym()
