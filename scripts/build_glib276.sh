@@ -55,7 +55,10 @@ cpu = '$CPU'
 endian = 'little'
 EOF
 
+# Only search OUR pkg-config dir: the host Ubuntu pcre2/glib etc. would be
+# picked up otherwise and break cross builds (host headers not in sysroot)
 export PKG_CONFIG_PATH="$JNI/pc"
+export PKG_CONFIG_LIBDIR="$JNI/pc"
 cd "$GLIB_SRC"
 # glib requires iconv on non-Windows; bionic has none and meson's iconv probe
 # cannot use our pkg-config entries -> relax it to optional (iconv.h comes
