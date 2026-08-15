@@ -65,7 +65,6 @@ static inline int limbo_fprintf(FILE *stream, const char *format, ...){
     va_end(ap);
     return res;
 }
-#define fprintf(...) limbo_fprintf(__VA_ARGS__)
 
 static inline int limbo_vfprintf(FILE *stream, const char *format, va_list ap){
     int res = 0;
@@ -74,6 +73,11 @@ static inline int limbo_vfprintf(FILE *stream, const char *format, va_list ap){
     else res = vfprintf(stream, format, ap);
     return res;
 }
+
+// QEMU 11's MonitorClass has printf/fprintf function-pointer members;
+// these macros would corrupt them -> skip on QEMU11 builds.
+#ifndef __LIMBO_QEMU11__
+#define fprintf(...) limbo_fprintf(__VA_ARGS__)
 #define vfprintf(...) limbo_vfprintf(__VA_ARGS__)
 
 
@@ -81,6 +85,7 @@ static inline int limbo_vfprintf(FILE *stream, const char *format, va_list ap){
 #define printf(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
 #define vprintf(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
 #define perror(x) __android_log_print(ANDROID_LOG_ERROR, TAG, x)
+#endif // __LIMBO_QEMU11__
 
 //QEMU Logging rerouting
 #ifdef ENABLE_OVERRIDE_QEMU_LOG

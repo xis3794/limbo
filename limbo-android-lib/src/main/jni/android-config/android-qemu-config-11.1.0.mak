@@ -27,3 +27,6 @@ MISC += --disable-guest-agent
 # 11.x: configure passes -D options straight to meson;
 #       force PIC for static libs (needed to link .so)
 MISC += -Db_staticpic=true
+
+# 11.x: MonitorClass has printf/fprintf members; skip logutils printf macros
+ARCH_CFLAGS += -D__LIMBO_QEMU11__
