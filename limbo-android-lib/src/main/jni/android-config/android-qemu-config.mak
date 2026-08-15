@@ -105,8 +105,9 @@ FDT_INC = -I$(LIMBO_JNI_ROOT)/qemu/dtc/libfdt
 #NPTL += --disable-nptl 
 
 #For 2.3.0
-#Misc (options supported by BOTH 5.1.0 and 8.0.5)
-MISC += --disable-tools --disable-libnfs --disable-tpm
+#Misc (options supported by BOTH 5.1.0 and 8.0.5/11.1.0)
+# NOTE: tpm and virtfs are ENABLED (Windows11 needs TPM, 9p for shared folders)
+MISC += --disable-tools --disable-libnfs
 MISC +=  --disable-qom-cast-debug
 MISC += --disable-libnfs --disable-libiscsi --disable-docs
 MISC += --disable-rdma --disable-brlapi --disable-curl
@@ -129,14 +130,18 @@ MISC += $(SSH2)
 #Trying nop doesn't work
 #MISC += --enable-trace-backends=nop
 
+#TPM - ENABLED (Windows 11 requires TPM 2.0)
+# (tpm device models compile in; swtpm backend can be added later)
+MISC += --enable-tpm
+
 #NUMA
 NUMA = --disable-numa
 
 #VHOST (options removed in QEMU 8.x; see android-qemu-config-5.1.0.mak)
 VHOST =
 
-#VIRT
-VIRT = --disable-virtfs
+#VIRT (9p shared folders) - ENABLED: Windows/Linux guests can mount host dirs
+VIRT = --enable-virtfs
 
 #AIO (Not supported yet)
 LINUX_AIO = --disable-linux-aio
