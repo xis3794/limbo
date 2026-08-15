@@ -84,6 +84,20 @@ Libs: -L\${libdir} -lcompat-musl
 Cflags: -I\${includedir}
 EOF
 
+# meson's iconv "system" probe also tries pkg-config name "libiconv"
+cat > "$PC/libiconv.pc" <<EOF
+prefix=$JNI/compat/musl
+exec_prefix=\${prefix}
+libdir=$OBJ
+includedir=\${prefix}/include
+
+Name: libiconv
+Description: iconv implementation (Limbo musl compat)
+Version: 1.16
+Libs: -L\${libdir} -lcompat-musl
+Cflags: -I\${includedir}
+EOF
+
 cat > "$PC/pixman-1.pc" <<EOF
 prefix=$JNI/pixman
 exec_prefix=\${prefix}

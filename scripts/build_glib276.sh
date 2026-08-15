@@ -35,6 +35,10 @@ esac
 
 CLANG_BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 mkdir -p "$OBJ"
+# meson's iconv "system" probe looks for a library named libiconv;
+# Limbo provides iconv symbols inside libcompat-musl.so
+ln -sf libcompat-musl.so "$OBJ/libiconv.so" 2>/dev/null || \
+  cp -f "$OBJ/libcompat-musl.so" "$OBJ/libiconv.so"
 
 cat > "$JNI/glib-cross.txt" <<EOF
 [binaries]
