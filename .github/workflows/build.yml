@@ -142,10 +142,10 @@ jobs:
 
       - name: Install extra EFI firmware (OVMF / VMWARE_EFI)
         run: |
-          # Copy Plus-style EFI firmwares into all module assets
+          # Unpack Plus-style EFI firmwares into all module assets
           for mod in limbo-android-x86 limbo-android-arm limbo-android-ppc limbo-android-sparc; do
             mkdir -p "$mod/src/main/assets/roms"
-            cp -f tools/firmware/*.fd "$mod/src/main/assets/roms/"
+            unzip -o -q tools/firmware/firmware.zip -d "$mod/src/main/assets/roms/"
           done
           echo "EFI firmware installed:"; ls -la limbo-android-x86/src/main/assets/roms/*.fd
 
