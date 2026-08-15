@@ -284,6 +284,40 @@ for _f in ['fsdev/9p-marshal.h', 'fsdev/9p-iov-marshal.c', 'fsdev/9p-marshal.c']
     else:
         log('[SKIP] %s already patched' % _f)
 
+# 9p-marshal.h is included by many hw/9pfs/*.c files; the undef above kills
+# bionic's st_atime/st_mtime/st_ctime macros for ALL includers. Re-define
+# them at the END of 9p-marshal.h so every includer gets them back.
+_mh = read('fsdev/9p-marshal.h')
+_mhredef = """
+#ifdef __ANDROID__
+/* Limbo: restore bionic stat accessor macros after undef above */
+#ifndef st_atime
+#define st_atime st_atim.tv_sec
+#endif
+#ifndef st_mtime
+#define st_mtime st_mtim.tv_sec
+#endif
+#ifndef st_ctime
+#define st_ctime st_ctim.tv_sec
+#endif
+#ifndef st_atime_nsec
+#define st_atime_nsec st_atim.tv_nsec
+#endif
+#ifndef st_mtime_nsec
+#define st_mtime_nsec st_mtim.tv_nsec
+#endif
+#ifndef st_ctime_nsec
+#define st_ctime_nsec st_ctim.tv_nsec
+#endif
+#endif
+"""
+if 'Limbo: restore bionic stat accessor' not in _mh:
+    _mh = _mh + _mhredef
+    write('fsdev/9p-marshal.h', _mh)
+    log('[OK] fsdev/9p-marshal.h: stat macros restored at end')
+else:
+    log('[SKIP] fsdev/9p-marshal.h already has restore block')
+
 # hw/9pfs/9p.c includes 9p-marshal.h (undefs above), which kills bionic's
 # st_atime/st_mtime/st_ctime macros -> re-define them for Android
 _p9c = read('hw/9pfs/9p.c')
