@@ -244,11 +244,11 @@ config:
 	--extra-cflags=\
 	"\
 	$(SYSTEM_INCLUDE) \
-	-I$(LIMBO_JNI_ROOT)/glib \
-	-I$(LIMBO_JNI_ROOT)/glib/glib \
-	-I$(LIMBO_JNI_ROOT)/glib/gmodule \
-	-I$(LIMBO_JNI_ROOT)/glib/io \
-	-I$(LIMBO_JNI_ROOT)/glib/android \
+	-I$(LIMBO_JNI_ROOT)/$(GLIB_DIR) \
+	-I$(LIMBO_JNI_ROOT)/$(GLIB_DIR)/glib \
+	-I$(LIMBO_JNI_ROOT)/$(GLIB_DIR)/gmodule \
+	-I$(LIMBO_JNI_ROOT)/$(GLIB_DIR)/io \
+	-I$(LIMBO_JNI_ROOT)/$(GLIB_DIR)/android \
 	-I$(LIMBO_JNI_ROOT)/pixman \
 	-I$(LIMBO_JNI_ROOT)/pixman/pixman \
 	-I$(LIMBO_JNI_ROOT)/scsi \

@@ -135,6 +135,11 @@ endif
 # QEMU 8.x/11.x (meson): make our hand-built pkg-config files visible
 # Also export NDK tool names so QEMU configure/meson finds them
 # (configure uses ${NM-${cross_prefix}nm} pattern: env var wins if set)
+ifeq ($(USE_QEMU_VERSION),11.1.0)
+GLIB_DIR := glib276
+else
+GLIB_DIR := glib
+endif
 ifeq ($(filter 8.0.5 11.1.0,$(USE_QEMU_VERSION)),$(USE_QEMU_VERSION))
 export PKG_CONFIG := pkg-config
 export PKG_CONFIG_PATH := $(LIMBO_JNI_ROOT)/pc
