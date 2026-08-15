@@ -7,6 +7,7 @@ LOCAL_SRC_FILES := \
 	limbo_compat.c \
 	limbo_compat_qemu.c \
 	limbo_compat_signals.cpp \
+	limbo_compat_stubs.c \
 	$(NDK_ROOT)/sources/android/cpufeatures/cpu-features.c
 
 LOCAL_MODULE := compat-limbo
