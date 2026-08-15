@@ -323,30 +323,9 @@ int limbo_sdl_scale_hint = -1;
 write('ui/sdl2.c', sdl2)
 
 # ---------------------------------------------------------------------------
-# 6. VNC: configurable refresh rate (Limbo perf tweak)
+# 6. VNC: 8.x removed/changed several internals; Limbo's refresh-rate hack
+#    (5.1-era) is unsafe here -> keep stock QEMU 8.x VNC code.
 # ---------------------------------------------------------------------------
-vnc = read('ui/vnc.c')
-if 'vnc_refresh_interval_base' not in vnc:
-    old_vnc = """#define VNC_REFRESH_INTERVAL_BASE GUI_REFRESH_INTERVAL_DEFAULT
-#define VNC_REFRESH_INTERVAL_INC  50"""
-    new_vnc = """#ifdef __LIMBO__
-int vnc_refresh_interval_base = 30;
-#define VNC_REFRESH_INTERVAL_BASE vnc_refresh_interval_base
-
-int vnc_refresh_interval_inc = 30;
-#define VNC_REFRESH_INTERVAL_INC vnc_refresh_interval_inc
-#else
-#define VNC_REFRESH_INTERVAL_BASE GUI_REFRESH_INTERVAL_DEFAULT
-#define VNC_REFRESH_INTERVAL_INC  50
-#endif //__LIMBO__"""
-    if old_vnc in vnc:
-        vnc = vnc.replace(old_vnc, new_vnc, 1)
-        log('[OK] ui/vnc.c: refresh interval')
-    else:
-        log('[SKIP] ui/vnc.c: refresh interval pattern differs')
-    write('ui/vnc.c', vnc)
-else:
-    log('[SKIP] ui/vnc.c: already patched')
 
 # ---------------------------------------------------------------------------
 # 7. osdep.h: Android needs linux/mman.h for some MAP_* macros
