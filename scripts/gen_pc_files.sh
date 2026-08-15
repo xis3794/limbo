@@ -13,6 +13,7 @@ OBJ="$JNI/../obj/local/$ABI"
 PC="$JNI/pc"
 # glib source dir: "glib" (autotools 2.56 for QEMU5/8) or "glib276" (meson for QEMU9+)
 GLIB_DIR=${GLIB_DIR:-glib}
+GLIB_VERSION=${GLIB_VERSION:-2.56.1}
 GLIB="$JNI/$GLIB_DIR"
 mkdir -p "$PC"
 
@@ -24,9 +25,9 @@ includedir=\${prefix}
 
 Name: glib-2.0
 Description: GLib (Limbo self-built)
-Version: 2.56.1
+Version: $GLIB_VERSION
 Libs: -L\${libdir} -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo -lcompat-iconv
-Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/gmodule -I\${includedir}/io -I\${includedir}/android -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
+Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/build/glib -I\${includedir}/gmodule -I\${includedir}/io -I\${includedir}/android -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
 EOF
 
 # QEMU 11 requires gmodule; point it at the same glib build
@@ -38,9 +39,9 @@ includedir=\${prefix}
 
 Name: gmodule-export-2.0
 Description: GModule (Limbo self-built)
-Version: 2.56.1
+Version: $GLIB_VERSION
 Libs: -L\${libdir} -lgmodule-2.0 -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo
-Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/gmodule -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
+Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/build/glib -I\${includedir}/gmodule -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
 EOF
 
 cat > "$PC/gmodule-no-export-2.0.pc" <<EOF
@@ -51,9 +52,9 @@ includedir=\${prefix}
 
 Name: gmodule-no-export-2.0
 Description: GModule (Limbo self-built)
-Version: 2.56.1
+Version: $GLIB_VERSION
 Libs: -L\${libdir} -lgmodule-2.0 -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo
-Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/gmodule -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
+Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/build/glib -I\${includedir}/gmodule -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
 EOF
 
 cat > "$PC/gthread-2.0.pc" <<EOF
@@ -67,6 +68,20 @@ Description: Thread support for GLib (Limbo self-built)
 Version: 2.56.1
 Libs: -L\${libdir} -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo
 Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/gmodule -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
+EOF
+
+# iconv: bionic has no iconv; Limbo provides it inside libcompat-musl.so
+cat > "$PC/iconv.pc" <<EOF
+prefix=$JNI/compat/musl
+exec_prefix=\${prefix}
+libdir=$OBJ
+includedir=\${prefix}/include
+
+Name: iconv
+Description: iconv implementation (Limbo musl compat)
+Version: 1.16
+Libs: -L\${libdir} -lcompat-musl
+Cflags: -I\${includedir}
 EOF
 
 cat > "$PC/pixman-1.pc" <<EOF

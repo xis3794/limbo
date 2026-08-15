@@ -114,6 +114,18 @@ else:
     log('[WARN] meson.build: CONFIG_IOVEC pattern not found')
 write('meson.build', meson)
 
+# QEMU11 checks cc.sizeof('void *') < 8 - the probe fails on NDK clang
+# cross builds because of -Werror + GCC-only warning options, returning -1.
+# NDK aarch64/x86_64 targets are always 64-bit: skip the probe.
+old_64 = "if (cc.sizeof('void *') < 8) and (have_system or have_user)"
+new_64 = "if false # Limbo: NDK aarch64 host is 64-bit; skip sizeof probe"
+if old_64 in meson:
+    meson = meson.replace(old_64, new_64, 1)
+    log('[OK] meson.build: 64-bit sizeof probe skipped')
+else:
+    log('[SKIP] meson.build: 64-bit probe pattern differs')
+write('meson.build', meson)
+
 # ---------------------------------------------------------------------------
 # 2. audio: QEMU11 already defaults to 22050 (QEMU8 needed a patch)
 # ---------------------------------------------------------------------------

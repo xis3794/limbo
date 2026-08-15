@@ -180,7 +180,7 @@ ffi:
 config-glib: ndk
 	@if [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
 		echo "QEMU11: glib2.76 built via meson (config skipped)"; \
-		GLIB_DIR=glib276 bash $(LIMBO_PRJ_ROOT)/scripts/gen_pc_files.sh $(LIMBO_JNI_ROOT) $(APP_ABI); \
+		GLIB_DIR=glib276 GLIB_VERSION=2.76.6 bash $(LIMBO_PRJ_ROOT)/scripts/gen_pc_files.sh $(LIMBO_JNI_ROOT) $(APP_ABI); \
 		exit 0; \
 	fi
 	cd $(LIMBO_JNI_ROOT)/glib && NOCONFIGURE=1 ./autogen.sh

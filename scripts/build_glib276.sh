@@ -55,10 +55,10 @@ export PKG_CONFIG_PATH="$JNI/pc"
 cd "$GLIB_SRC"
 meson setup "$GLIB_BUILD" . --cross-file "$JNI/glib-cross.txt" \
   --default-library=shared -Dprefix=/usr \
-  -Dlibmount=disabled -Dselinux=disabled -Ddtrace=disabled \
-  -Dsystemtap=disabled -Dgtk_doc=false -Dman=false \
+  -Dlibmount=disabled -Dselinux=disabled -Ddtrace=false \
+  -Dsystemtap=false -Dgtk_doc=false -Dman=false \
   -Dtests=false -Dinstalled_tests=false \
-  -Diconv=disabled -Dpcre2=disabled -Dlibelf=disabled \
+  -Dlibelf=disabled \
   -Dbsymbolic_functions=false -Dforce_posix_threads=true \
   -Dnls=disabled
 ninja -C "$GLIB_BUILD"
