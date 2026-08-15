@@ -247,9 +247,28 @@ private String getQemuLibrary() {
     }
 
     private void addAudioOptions(ArrayList<String> paramsList) {
-        if (getSoundCard() != null) {
-            paramsList.add("-soundhw");
-            paramsList.add(getSoundCard());
+        // QEMU 6.0+ removed -soundhw; use -audiodev + -device instead
+        String card = getSoundCard();
+        if (card == null || card.equals("None"))
+            return;
+        paramsList.add("-audiodev");
+        paramsList.add("sdl,id=snd0");
+        if (card.equals("hda")) {
+            paramsList.add("-device");
+            paramsList.add("intel-hda");
+            paramsList.add("-device");
+            paramsList.add("hda-duplex,audiodev=snd0");
+        } else if (card.equals("ac97")) {
+            // QEMU device name for ac97 is "AC97"
+            paramsList.add("-device");
+            paramsList.add("AC97,audiodev=snd0");
+        } else if (card.equals("all")) {
+            // "all" has no direct equivalent; use es1370 as representative
+            paramsList.add("-device");
+            paramsList.add("es1370,audiodev=snd0");
+        } else {
+            paramsList.add("-device");
+            paramsList.add(card + ",audiodev=snd0");
         }
     }
 
