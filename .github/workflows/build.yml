@@ -140,6 +140,15 @@ jobs:
           fi
           make limbo
 
+      - name: Install extra EFI firmware (OVMF / VMWARE_EFI)
+        run: |
+          # Copy Plus-style EFI firmwares into all module assets
+          for mod in limbo-android-x86 limbo-android-arm limbo-android-ppc limbo-android-sparc; do
+            mkdir -p "$mod/src/main/assets/roms"
+            cp -f tools/firmware/*.fd "$mod/src/main/assets/roms/"
+          done
+          echo "EFI firmware installed:"; ls -la limbo-android-x86/src/main/assets/roms/*.fd
+
       - name: Build APK with Gradle 7.0.2
         env:
           JAVA_HOME: ${{ steps.jdk11.outputs.path }}

@@ -323,11 +323,12 @@ private String getQemuLibrary() {
 
     private void addCpuBoardOptions(ArrayList<String> paramsList) {
 
-        //XXX: SMP is not working correctly for some guest OSes
-        //so we enable multi core only under KVM
-        // anyway regular emulation is not gaining any benefit unless mttcg is enabled but that
-        // doesn't work for x86 guests yet
-        if (getMachine().getCpuNum() > 1) {
+        // Plus feature: force multicore when MTTCG is enabled (no need to
+        // manually type "-smp n,cores=n")
+        if (getMachine().getEnableMTTCG() != 0 && getMachine().getCpuNum() <= 1) {
+            paramsList.add("-smp");
+            paramsList.add("2");
+        } else if (getMachine().getCpuNum() > 1) {
             paramsList.add("-smp");
             paramsList.add(getMachine().getCpuNum() + "");
         }
@@ -362,8 +363,20 @@ private String getQemuLibrary() {
         }
 
         if (cpu != null && !cpu.equals("Default")) {
+            // Plus feature: AVX enablement + use "max" CPU for best TCG
+            // performance on x86_64 guests
+            if (LimboApplication.arch == Config.Arch.x86_64) {
+                if (Config.enableAVX) {
+                    cpu += ",+avx,+xsave,+xsaveopt,+f16c";
+                }
+            }
             paramsList.add("-cpu");
             paramsList.add(cpu);
+        } else if (LimboApplication.arch == Config.Arch.x86_64) {
+            // Default CPU: use "max" (all TCG-supported features) for
+            // significantly better performance (CPU-Z friendly)
+            paramsList.add("-cpu");
+            paramsList.add("max");
         }
 
         paramsList.add("-m");

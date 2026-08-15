@@ -85,6 +85,7 @@ COPY_ROMS=-mkdir -p ../assets/roms && cp -rf ./qemu/pc-bios/*.rom \
 ./qemu/pc-bios/*.svg \
 ./qemu/pc-bios/*.rsrc \
 ./qemu/pc-bios/openbios-* \
+./qemu/pc-bios/*.fd \
 ./qemu/pc-bios/README \
 ../assets/roms/
 

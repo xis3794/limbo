@@ -22,7 +22,8 @@ USE_NDK_PLATFORM26 ?= false
 USE_OPTIMIZATION ?= true
 
 # Hardening: it produces slower runtimes but helps preventing buffer overflow attacks
-USE_SECURITY ?= true
+# Set to false for maximum performance (matches performance-focused builds)
+USE_SECURITY ?= false
 
 # Uncomment to enable debugging
 # If you enable debugging you should turn off optimization as well
