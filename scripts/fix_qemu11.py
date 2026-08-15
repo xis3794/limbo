@@ -308,7 +308,9 @@ for _f in ['fsdev/9p-marshal.h', 'fsdev/9p-iov-marshal.c', 'fsdev/9p-marshal.c']
         log('[SKIP] %s already patched' % _f)
 
 # 9p-marshal.h uses V9fsStatDotl (fields really exist) - keep ONLY undef there.
-# hw/9pfs/*.c use struct stat (needs bionic macros): restore macros in 9p.h.
+# hw/9pfs/*.c use struct stat whose st_atime/st_mtime/st_ctime are macros in
+# bionic (expanding to st_atim.tv_sec). Macros can't be used because V9fsStatDotl
+# also has st_atime members. Instead rewrite struct-stat accesses directly.
 for _f in ['fsdev/9p-marshal.h', 'fsdev/9p-iov-marshal.c', 'fsdev/9p-marshal.c']:
     try:
         _c = read(_f)
@@ -322,46 +324,24 @@ for _f in ['fsdev/9p-marshal.h', 'fsdev/9p-iov-marshal.c', 'fsdev/9p-marshal.c']
     else:
         log('[SKIP] %s already patched' % _f)
 
-# restore bionic stat accessor macros in hw/9pfs/9p.h (included by all 9p impls)
-_ph = read('hw/9pfs/9p.h')
-if 'Limbo: restore bionic stat accessor' not in _ph:
-    _ph = _ph + _mhredef
-    write('hw/9pfs/9p.h', _ph)
-    log('[OK] hw/9pfs/9p.h: stat macros restored at end')
-else:
-    log('[SKIP] hw/9pfs/9p.h already has restore block')
+# rewrite stbuf->st_atime (struct stat) to stbuf->st_atim.tv_sec (bionic)
+import glob as _glob
+for _f in sorted(_glob.glob(os.path.join(QEMU, 'hw/9pfs/*.c'))):
+    _rel = os.path.relpath(_f, QEMU)
+    _c = read(_rel)
+    _c2 = _c
+    _c2 = _re.sub(r'stbuf->st_atime\b', 'stbuf->st_atim.tv_sec', _c2)
+    _c2 = _re.sub(r'stbuf->st_mtime\b', 'stbuf->st_mtim.tv_sec', _c2)
+    _c2 = _re.sub(r'stbuf->st_ctime\b', 'stbuf->st_ctim.tv_sec', _c2)
+    if _c2 != _c:
+        write(_rel, _c2)
+        log('[OK] %s: stbuf stat fields rewritten for bionic' % _rel)
+    else:
+        log('[SKIP] %s: no stbuf->st_*time' % _rel)
 
-# hw/9pfs/9p.c includes 9p-marshal.h (undefs above), which kills bionic's
-# st_atime/st_mtime/st_ctime macros -> re-define them for Android
-_p9c = read('hw/9pfs/9p.c')
-_p9anchor = '#include "qemu/osdep.h"'
-_p9redef = """
-#ifdef __ANDROID__
-#ifndef st_atime
-#define st_atime st_atim.tv_sec
-#endif
-#ifndef st_mtime
-#define st_mtime st_mtim.tv_sec
-#endif
-#ifndef st_ctime
-#define st_ctime st_ctim.tv_sec
-#endif
-#ifndef st_atime_nsec
-#define st_atime_nsec st_atim.tv_nsec
-#endif
-#ifndef st_mtime_nsec
-#define st_mtime_nsec st_mtim.tv_nsec
-#endif
-#ifndef st_ctime_nsec
-#define st_ctime_nsec st_ctim.tv_nsec
-#endif
-#endif"""
-if _p9anchor in _p9c and 'Limbo re-enable bionic stat' not in _p9c:
-    _p9c = _p9c.replace(_p9anchor, _p9anchor + _p9redef, 1)
-    write('hw/9pfs/9p.c', _p9c)
-    log('[OK] hw/9pfs/9p.c: bionic stat macros re-defined')
-else:
-    log('[SKIP] hw/9pfs/9p.c: anchor/patched status differs')
+# hw/9pfs/9p.c previously re-defined st_atime macros; the direct stbuf rewrite
+# above is the correct approach (V9fsStatDotl also has st_atime members).
+# (No macro restore block - would corrupt V9fsStatDotl accesses.)
 
 # ---------------------------------------------------------------------------
 # 6. Limbo UI hook symbols (5.1-era) kept for vm-executor-jni.c dlsym()
