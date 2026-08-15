@@ -283,16 +283,11 @@ deps: ndk ffi glib pixman
 _build-qemu: ndk 
 	make _qemu
 	# QEMU 8.x: meson/ninja outputs the emulator as a shared lib into qemu/build/
-	# copy it into the NDK obj dir (and redefine file IO syms for Android SAF)
+	# copy it into the NDK obj dir (file IO redirect is done via -Wl,--wrap in
+	# fix_qemu805.py, no objcopy --redefine-sym needed for .so)
 	@if [ -f qemu/build/qemu-system-$(GUEST_SHORT).so ]; then \
 		cp -f qemu/build/qemu-system-$(GUEST_SHORT).so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so; \
-		$(OBJ_COPY) --redefine-sym open=android_open \
-			--redefine-sym fopen=android_fopen \
-			--redefine-sym close=android_close \
-			--redefine-sym stat=android_stat \
-			--redefine-sym mkstemp=android_mkstemp \
-			$(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so; \
-		echo "[OK] QEMU8.x .so copied & syms redefined"; \
+		echo "[OK] QEMU8.x .so copied"; \
 	fi
 	$(INSTALL_LIBS)
 	$(RENAME_TUNCTL)

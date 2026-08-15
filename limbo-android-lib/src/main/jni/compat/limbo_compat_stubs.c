@@ -9,8 +9,46 @@
  * startup. The stubbed features degrade gracefully (return ENOSYS/NULL).
  */
 #include <errno.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include "limbo_compat_filesystem.h"
+
+/* ------------------------------------------------------------------ */
+/* ld --wrap entry points: redirect QEMU's file IO to Limbo's          */
+/* SAF-aware compat layer (android_open/android_fopen/...).            */
+/* These are referenced by -Wl,--wrap=open etc. in the .so link step.  */
+/* ------------------------------------------------------------------ */
+int __wrap_open(const char *path, int flags, ...)
+{
+    va_list ap;
+    mode_t mode = 0;
+    va_start(ap, flags);
+    mode = (mode_t)va_arg(ap, int);
+    va_end(ap);
+    return android_open(path, flags, mode);
+}
+
+FILE *__wrap_fopen(const char *path, const char *mode)
+{
+    return android_fopen(path, mode);
+}
+
+int __wrap_close(int fd)
+{
+    return android_close(fd);
+}
+
+int __wrap_stat(const char *path, struct stat *buf)
+{
+    return android_stat(path, buf);
+}
+
+int __wrap_mkstemp(char *t)
+{
+    return android_mkstemp(t);
+}
 
 /* ------------------------------------------------------------------ */
 /* Network interface list (bionic only provides these since API 24)   */
