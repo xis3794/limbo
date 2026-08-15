@@ -340,6 +340,35 @@ else:
     log('[SKIP] include/qemu/osdep.h: already patched or anchor differs')
 
 # ---------------------------------------------------------------------------
+# 8. Limbo UI hook symbols (5.1-era) kept for vm-executor-jni.c dlsym().
+#    QEMU8.x code does not read these; they just need to EXIST in the .so
+#    so the JNI layer can resolve them (otherwise log spam + broken UI).
+# ---------------------------------------------------------------------------
+hook = """/*
+ * limbo-hooks.c
+ * Limbo UI hook variables (5.1-era) kept for vm-executor-jni.c dlsym().
+ * QEMU 8.x does not use these knobs; they exist so the JNI layer can
+ * resolve them without errors. UI features degrade gracefully.
+ */
+int limbo_ignore_breakpoint_invalidate = 0;
+int limbo_vga_full_update = 0;
+int vnc_refresh_interval_inc = 30;
+int vnc_refresh_interval_base = 30;
+"""
+write('util/limbo-hooks.c', hook)
+log('[OK] util/limbo-hooks.c created')
+
+umeson = read('util/meson.build')
+old_util = "util_ss.add(files('osdep.c', 'cutils.c', 'unicode.c', 'qemu-timer-common.c'))"
+new_util = "util_ss.add(files('osdep.c', 'cutils.c', 'unicode.c', 'qemu-timer-common.c', 'limbo-hooks.c'))"
+if old_util in umeson:
+    umeson = umeson.replace(old_util, new_util, 1)
+    write('util/meson.build', umeson)
+    log('[OK] util/meson.build: limbo-hooks.c registered')
+else:
+    log('[FAIL] util/meson.build: pattern not found')
+
+# ---------------------------------------------------------------------------
 print('=' * 60)
 print('fix_qemu805.py done. Summary:')
 for l in LOGS:
