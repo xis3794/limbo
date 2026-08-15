@@ -87,7 +87,7 @@ cp -f "$GLIB_BUILD"/gmodule/libgmodule-2.0.so.0.* "$OBJ/libgmodule-2.0.so" 2>/de
 
 # libglib-2.0.so has DT_NEEDED on libpcre2-8.so.0 (meson wrap build) and
 # libintl.so.8 (NDK stub); both must be shipped in the APK or dlopen fails.
-PCRE2_SO=$(find "$GLIB_BUILD/subprojects" -name 'libpcre2-8.so*' 2>/dev/null | head -1)
+PCRE2_SO=$(find "$GLIB_BUILD/subprojects" -type f -name 'libpcre2-8.so*' 2>/dev/null | head -1)
 if [ -n "$PCRE2_SO" ]; then
   cp -f "$PCRE2_SO" "$OBJ/libpcre2-8.so.0"
   echo "[OK] libpcre2-8.so.0 copied to $OBJ"
