@@ -85,9 +85,9 @@ COPY_ROMS=-mkdir -p ../assets/roms && cp -rf ./qemu/pc-bios/*.rom \
 ./qemu/pc-bios/*.svg \
 ./qemu/pc-bios/*.rsrc \
 ./qemu/pc-bios/openbios-* \
-./qemu/pc-bios/*.fd \
+./qemu/pc-bios/*.fd 2>/dev/null || true \
 ./qemu/pc-bios/README \
-../assets/roms/
+../assets/roms/ || true
 
 COPY_KEYMAPS=cp -rf ./qemu/pc-bios/keymaps ../assets/roms/
 COPY_QEMU_VERSION=cp -f ./qemu/VERSION ../assets/QEMU_VERSION
@@ -112,7 +112,8 @@ COPY_GDB_SETUP_LIBS=-cp -f $(NDK_PROJECT_PATH)/libs/$(APP_ABI)/gdb.setup \
 	$(NDK_PROJECT_PATH)/libs/gdb.setup
 	
 ifneq ($(NDK_DEBUG),1)
-	STRIP_LIBS=$(STRIP) $(NDK_PROJECT_PATH)/libs/$(APP_ABI_DIR)/*.so
+	# strip errors on exotic .so names must not fail the build
+	STRIP_LIBS=$(STRIP) $(NDK_PROJECT_PATH)/libs/$(APP_ABI_DIR)/*.so || true
 endif
 
 # we disable for now some options so armv7 host can compile with gcc
