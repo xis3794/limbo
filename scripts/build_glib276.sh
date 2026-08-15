@@ -71,7 +71,7 @@ meson setup "$GLIB_BUILD" . --cross-file "$JNI/glib-cross.txt" \
   -Dlibmount=disabled -Dselinux=disabled -Ddtrace=false \
   -Dsystemtap=false -Dgtk_doc=false -Dman=false \
   -Dtests=false -Dinstalled_tests=false \
-  -Dlibelf=disabled \
+  -Dlibelf=disabled -Dgio=disabled \
   -Dbsymbolic_functions=false -Dforce_posix_threads=true \
   -Dnls=disabled
 ninja -C "$GLIB_BUILD"
