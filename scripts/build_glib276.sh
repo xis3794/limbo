@@ -64,6 +64,9 @@ cd "$GLIB_SRC"
 # cannot use our pkg-config entries -> relax it to optional (iconv.h comes
 # from c_args, symbols resolve at runtime from libcompat-musl.so)
 sed -i "s|^  libiconv = dependency('iconv')|  libiconv = dependency('iconv', required: false)|" "$GLIB_SRC/meson.build"
+# bionic libc exports kqueue/kevent stub symbols (link probe passes) but has
+# no sys/event.h -> disable kqueue file monitor
+sed -i 's|^if have_func_kqueue and have_func_kevent$|if false # Limbo: no kqueue on Android|' "$GLIB_SRC/gio/meson.build"
 meson setup "$GLIB_BUILD" . --cross-file "$JNI/glib-cross.txt" \
   --default-library=shared -Dprefix=/usr \
   -Dc_args="-I$JNI/compat/musl/include -Wno-unknown-warning-option -Wno-error=implicit-function-declaration" \
@@ -71,7 +74,7 @@ meson setup "$GLIB_BUILD" . --cross-file "$JNI/glib-cross.txt" \
   -Dlibmount=disabled -Dselinux=disabled -Ddtrace=false \
   -Dsystemtap=false -Dgtk_doc=false -Dman=false \
   -Dtests=false -Dinstalled_tests=false \
-  -Dlibelf=disabled -Dgio=disabled \
+  -Dlibelf=disabled \
   -Dbsymbolic_functions=false -Dforce_posix_threads=true \
   -Dnls=disabled
 ninja -C "$GLIB_BUILD"
