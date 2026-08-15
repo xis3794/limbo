@@ -284,6 +284,38 @@ for _f in ['fsdev/9p-marshal.h', 'fsdev/9p-iov-marshal.c', 'fsdev/9p-marshal.c']
     else:
         log('[SKIP] %s already patched' % _f)
 
+# hw/9pfs/9p.c includes 9p-marshal.h (undefs above), which kills bionic's
+# st_atime/st_mtime/st_ctime macros -> re-define them for Android
+_p9c = read('hw/9pfs/9p.c')
+_p9anchor = '#include "qemu/osdep.h"'
+_p9redef = """
+#ifdef __ANDROID__
+#ifndef st_atime
+#define st_atime st_atim.tv_sec
+#endif
+#ifndef st_mtime
+#define st_mtime st_mtim.tv_sec
+#endif
+#ifndef st_ctime
+#define st_ctime st_ctim.tv_sec
+#endif
+#ifndef st_atime_nsec
+#define st_atime_nsec st_atim.tv_nsec
+#endif
+#ifndef st_mtime_nsec
+#define st_mtime_nsec st_mtim.tv_nsec
+#endif
+#ifndef st_ctime_nsec
+#define st_ctime_nsec st_ctim.tv_nsec
+#endif
+#endif"""
+if _p9anchor in _p9c and 'Limbo re-enable bionic stat' not in _p9c:
+    _p9c = _p9c.replace(_p9anchor, _p9anchor + _p9redef, 1)
+    write('hw/9pfs/9p.c', _p9c)
+    log('[OK] hw/9pfs/9p.c: bionic stat macros re-defined')
+else:
+    log('[SKIP] hw/9pfs/9p.c: anchor/patched status differs')
+
 # ---------------------------------------------------------------------------
 # 6. Limbo UI hook symbols (5.1-era) kept for vm-executor-jni.c dlsym()
 # ---------------------------------------------------------------------------
