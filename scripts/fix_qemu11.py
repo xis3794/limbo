@@ -126,6 +126,18 @@ else:
     log('[SKIP] meson.build: 64-bit probe pattern differs')
 write('meson.build', meson)
 
+# QEMU11 compiler version check uses compiler.compiles() which runs with
+# -Werror + our GCC-style warning flags; fails on clang -> error. NDK r23
+# clang (12.x) satisfies the requirement, so just skip the check.
+old_ver = "    error('You either need GCC v10.4 or Clang v10.0 (or XCode Clang v15.0) to compile QEMU')"
+new_ver = "    message('Limbo: compiler version check skipped (NDK clang 12.x is fine)')"
+if old_ver in meson:
+    meson = meson.replace(old_ver, new_ver, 1)
+    log('[OK] meson.build: compiler version check skipped')
+else:
+    log('[SKIP] meson.build: compiler version check pattern differs')
+write('meson.build', meson)
+
 # ---------------------------------------------------------------------------
 # 2. audio: QEMU11 already defaults to 22050 (QEMU8 needed a patch)
 # ---------------------------------------------------------------------------
