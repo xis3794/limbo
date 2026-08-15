@@ -55,6 +55,7 @@ export PKG_CONFIG_PATH="$JNI/pc"
 cd "$GLIB_SRC"
 meson setup "$GLIB_BUILD" . --cross-file "$JNI/glib-cross.txt" \
   --default-library=shared -Dprefix=/usr \
+  --c_args="-I$JNI/compat/musl/include -Wno-unknown-warning-option" \
   -Dlibmount=disabled -Dselinux=disabled -Ddtrace=false \
   -Dsystemtap=false -Dgtk_doc=false -Dman=false \
   -Dtests=false -Dinstalled_tests=false \

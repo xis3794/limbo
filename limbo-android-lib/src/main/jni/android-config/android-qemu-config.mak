@@ -172,9 +172,10 @@ SPICE = --disable-spice
 #TCI
 #TCI = --enable-tcg-interpreter
 
-WARNING_FLAGS = -Wno-redundant-decls -Wno-unused-variable \
+WARNING_FLAGS = -Wno-unknown-warning-option \
+	-Wno-redundant-decls -Wno-unused-variable \
 	-Wno-maybe-uninitialized -Wno-unused-function \
-	-Wunused-but-set-variable -Wno-unknown-warning-option
+	-Wunused-but-set-variable
 	
 ifeq ($(APP_ABI), armeabi)
     QEMU_HOST_CPU = arm
