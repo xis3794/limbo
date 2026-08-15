@@ -132,10 +132,10 @@ else
     LIBPIXMAN_DEBUG =
 endif
 
-# QEMU 8.x (meson): make our hand-built pkg-config files visible
+# QEMU 8.x/11.x (meson): make our hand-built pkg-config files visible
 # Also export NDK tool names so QEMU configure/meson finds them
 # (configure uses ${NM-${cross_prefix}nm} pattern: env var wins if set)
-ifeq ($(USE_QEMU_VERSION),8.0.5)
+ifeq ($(filter 8.0.5 11.1.0,$(USE_QEMU_VERSION)),$(USE_QEMU_VERSION))
 export PKG_CONFIG := pkg-config
 export PKG_CONFIG_PATH := $(LIMBO_JNI_ROOT)/pc
 export NM
@@ -177,12 +177,13 @@ ffi:
 	LDFLAGS="$(ARCH_LD_FLAGS) $(SYS_ROOT) -nostdlib -fno-unwind-tables "
 	$(INSTALL_FFI_LIBS)
 
+ifeq ($(USE_QEMU_VERSION),11.1.0)
 config-glib: ndk
-	@if [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
-		echo "QEMU11: glib2.76 built via meson (config skipped)"; \
-		GLIB_DIR=glib276 GLIB_VERSION=2.76.6 bash $(LIMBO_PRJ_ROOT)/scripts/gen_pc_files.sh $(LIMBO_JNI_ROOT) $(APP_ABI); \
-		exit 0; \
-	fi
+	@echo "QEMU11: glib2.76 via meson (config skipped)"
+	GLIB_DIR=glib276 GLIB_VERSION=2.76.6 bash $(LIMBO_PRJ_ROOT)/scripts/gen_pc_files.sh $(LIMBO_JNI_ROOT) $(APP_ABI)
+
+else
+config-glib: ndk
 	cd $(LIMBO_JNI_ROOT)/glib && NOCONFIGURE=1 ./autogen.sh
 	cd $(LIMBO_JNI_ROOT)/glib && cp -rf $(LIMBO_JNI_ROOT)/patches/android.cache . \
 	&& chmod a-w android.cache && ./configure --host=$(GNU_HOST) --cache-file=android.cache \
@@ -200,12 +201,14 @@ config-glib: ndk
 	LIBFFI_CFLAGS="-I${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/include " \
 	LIBFFI_LIBS="${LIMBO_JNI_ROOT}/../obj/local/$(APP_ABI)/libffi.a"
 	bash $(LIMBO_PRJ_ROOT)/scripts/gen_pc_files.sh $(LIMBO_JNI_ROOT) $(APP_ABI)
+endif
 
+ifeq ($(USE_QEMU_VERSION),11.1.0)
 glib: ndk
-	@if [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
-		bash $(LIMBO_PRJ_ROOT)/scripts/build_glib276.sh $(LIMBO_JNI_ROOT) $(NDK_ROOT) $(APP_ABI); \
-		exit 0; \
-	fi
+	bash $(LIMBO_PRJ_ROOT)/scripts/build_glib276.sh $(LIMBO_JNI_ROOT) $(NDK_ROOT) $(APP_ABI)
+
+else
+glib: ndk
 	cd $(LIMBO_JNI_ROOT)/glib/glib && $(MAKE) -j $(BUILD_THREADS) CFLAGS="$(ARCH_CFLAGS) \
 	$(NDK_SYSROOT_INC) \
 	$(NDK_SYSROOT_ARCH_INC) \
@@ -218,6 +221,7 @@ glib: ndk
 	LIBFFI_CFLAGS="-I${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/include " \
 	LIBFFI_LIBS="${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/.libs/libffi.a "
 	$(INSTALL_GLIB_LIBS)
+endif
 
 config-libslirp:
 	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ] || [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \

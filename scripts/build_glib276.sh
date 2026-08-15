@@ -56,6 +56,7 @@ cd "$GLIB_SRC"
 meson setup "$GLIB_BUILD" . --cross-file "$JNI/glib-cross.txt" \
   --default-library=shared -Dprefix=/usr \
   -Dc_args="-I$JNI/compat/musl/include -Wno-unknown-warning-option" \
+  -Dc_link_args="-L$OBJ -lcompat-musl -llog -Wl,-z,undefs" \
   -Dlibmount=disabled -Dselinux=disabled -Ddtrace=false \
   -Dsystemtap=false -Dgtk_doc=false -Dman=false \
   -Dtests=false -Dinstalled_tests=false \
