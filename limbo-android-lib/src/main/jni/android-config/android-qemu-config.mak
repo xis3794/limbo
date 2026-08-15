@@ -9,6 +9,8 @@ else ifeq ($(USE_QEMU_VERSION),5.1.0)
 include $(QEMU_CONFIG_DIR)/android-qemu-config-5.1.0.mak
 else ifeq ($(USE_QEMU_VERSION),8.0.5)
 include $(QEMU_CONFIG_DIR)/android-qemu-config-8.0.5.mak
+else ifeq ($(USE_QEMU_VERSION),11.1.0)
+include $(QEMU_CONFIG_DIR)/android-qemu-config-11.1.0.mak
 else
 $(error Unsupported QEMU version = $(USE_QEMU_VERSION))
 endif
@@ -111,7 +113,7 @@ MISC += --disable-rdma --disable-brlapi --disable-curl
 MISC += --disable-vde --disable-netmap --disable-cap-ng
 MISC += --disable-attr --disable-pie
 MISC += --disable-rbd --disable-lzo  --disable-snappy 
-MISC += --disable-seccomp --disable-bzip2 --disable-glusterfs 
+MISC += --disable-seccomp --disable-bzip2
 MISC += --disable-vte
 MISC += --disable-opengl
 MISC += --disable-werror

@@ -18,6 +18,9 @@ MISC += --disable-zstd
 # 8.x: libudev not available in NDK
 MISC += --disable-libudev
 
+# 8.x: glusterfs option still supported here (removed in QEMU 11)
+MISC += --disable-glusterfs
+
 # 8.x: vhost-user test links fail (memfd_create not in API 21)
 MISC += --disable-vhost-user
 MISC += --disable-vhost-crypto

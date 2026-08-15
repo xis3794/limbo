@@ -49,8 +49,8 @@ BUILD_HOST?=arm64-v8a
 BUILD_GUEST?=x86_64-softmmu
 
 # QEMU Version
-# values: 2.9.1, 5.1.0, 8.0.5
-USE_QEMU_VERSION ?= 8.0.5
+# values: 2.9.1, 5.1.0, 8.0.5, 11.1.0
+USE_QEMU_VERSION ?= 11.1.0
 
 # If you want to use SDL interface
 USE_SDL ?= true

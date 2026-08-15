@@ -178,46 +178,55 @@ ffi:
 	$(INSTALL_FFI_LIBS)
 
 config-glib: ndk
-	cd $(LIMBO_JNI_ROOT)/glib && NOCONFIGURE=1 ./autogen.sh
-	cd $(LIMBO_JNI_ROOT)/glib && cp -rf $(LIMBO_JNI_ROOT)/patches/android.cache . \
-	&& chmod a-w android.cache && ./configure --host=$(GNU_HOST) --cache-file=android.cache \
-	--disable-libmount  --disable-dtrace  --disable-systemtap --with-pcre=internal \
-	--with-libiconv=no \
-	--with-sysroot=$(SYSROOT) $(LIBGLIB_DEBUG) \
-	CFLAGS="$(ARCH_CFLAGS) -I$(NDK_INCLUDE) \
-	$(NDK_SYSROOT_INC) \
-	$(NDK_SYSROOT_ARCH_INC) \
-	-I${SYSROOT}/usr/include $(SYS_ROOT) \
-	-I${LIMBO_JNI_ROOT}/compat \
-	-I${LIMBO_JNI_ROOT}/compat/musl -I${LIMBO_JNI_ROOT}/compat/musl/include " \
-	LDFLAGS=" $(ARCH_LD_CLANG_FLAGS) $(ARCH_LD_FLAGS) $(SYS_ROOT) \
-	-L${LIMBO_JNI_ROOT}/../obj/local/$(APP_ABI) -lc -lcompat-musl -llog -lcompat-limbo " \
-	LIBFFI_CFLAGS="-I${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/include " \
-	LIBFFI_LIBS="${LIMBO_JNI_ROOT}/../obj/local/$(APP_ABI)/libffi.a"
-	# generate pkg-config files for QEMU 8.x (meson) build
-	bash $(LIMBO_PRJ_ROOT)/scripts/gen_pc_files.sh $(LIMBO_JNI_ROOT) $(APP_ABI)
+	@if [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
+		echo "QEMU11: glib2.76 is built via meson in the glib target"; \
+		GLIB_DIR=glib276 bash $(LIMBO_PRJ_ROOT)/scripts/gen_pc_files.sh $(LIMBO_JNI_ROOT) $(APP_ABI); \
+	else \
+		cd $(LIMBO_JNI_ROOT)/glib && NOCONFIGURE=1 ./autogen.sh; \
+		cd $(LIMBO_JNI_ROOT)/glib && cp -rf $(LIMBO_JNI_ROOT)/patches/android.cache . \
+		&& chmod a-w android.cache && ./configure --host=$(GNU_HOST) --cache-file=android.cache \
+		--disable-libmount  --disable-dtrace  --disable-systemtap --with-pcre=internal \
+		--with-libiconv=no \
+		--with-sysroot=$(SYSROOT) $(LIBGLIB_DEBUG) \
+		CFLAGS="$(ARCH_CFLAGS) -I$(NDK_INCLUDE) \
+		$(NDK_SYSROOT_INC) \
+		$(NDK_SYSROOT_ARCH_INC) \
+		-I${SYSROOT}/usr/include $(SYS_ROOT) \
+		-I${LIMBO_JNI_ROOT}/compat \
+		-I${LIMBO_JNI_ROOT}/compat/musl -I${LIMBO_JNI_ROOT}/compat/musl/include " \
+		LDFLAGS=" $(ARCH_LD_CLANG_FLAGS) $(ARCH_LD_FLAGS) $(SYS_ROOT) \
+		-L${LIMBO_JNI_ROOT}/../obj/local/$(APP_ABI) -lc -lcompat-musl -llog -lcompat-limbo " \
+		LIBFFI_CFLAGS="-I${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/include " \
+		LIBFFI_LIBS="${LIMBO_JNI_ROOT}/../obj/local/$(APP_ABI)/libffi.a"; \
+		# generate pkg-config files for QEMU meson build
+		bash $(LIMBO_PRJ_ROOT)/scripts/gen_pc_files.sh $(LIMBO_JNI_ROOT) $(APP_ABI); \
+	fi
 
 glib: ndk
-	cd $(LIMBO_JNI_ROOT)/glib/glib && $(MAKE) -j $(BUILD_THREADS) CFLAGS="$(ARCH_CFLAGS) \
-	$(NDK_SYSROOT_INC) \
-	$(NDK_SYSROOT_ARCH_INC) \
-	-I$(NDK_INCLUDE)  -I${SYSROOT}/usr/include $(SYS_ROOT) \
-	-I${NDK_ROOT}/sources/android/support/include -I${LIMBO_JNI_ROOT}/compat \
-	-include ${LIMBO_JNI_ROOT}/compat/musl/compat_iconv.h -I${LIMBO_JNI_ROOT}/compat/musl -I${LIMBO_JNI_ROOT}/compat/musl/include " \
-	LDFLAGS=" $(ARCH_LD_CLANG_FLAGS) $(ARCH_LD_FLAGS) $(SYS_ROOT) -L${LIMBO_JNI_ROOT}/../obj/local/$(APP_ABI) \
-	-lc -lcompat-musl -llog -lcompat-limbo " \
-	-lgcc \
-	LIBFFI_CFLAGS="-I${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/include " \
-	LIBFFI_LIBS="${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/.libs/libffi.a "
-	$(INSTALL_GLIB_LIBS)
+	@if [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
+		bash $(LIMBO_PRJ_ROOT)/scripts/build_glib276.sh $(LIMBO_JNI_ROOT) $(NDK_ROOT) $(APP_ABI); \
+	else \
+		cd $(LIMBO_JNI_ROOT)/glib/glib && $(MAKE) -j $(BUILD_THREADS) CFLAGS="$(ARCH_CFLAGS) \
+		$(NDK_SYSROOT_INC) \
+		$(NDK_SYSROOT_ARCH_INC) \
+		-I$(NDK_INCLUDE)  -I${SYSROOT}/usr/include $(SYS_ROOT) \
+		-I${NDK_ROOT}/sources/android/support/include -I${LIMBO_JNI_ROOT}/compat \
+		-include ${LIMBO_JNI_ROOT}/compat/musl/compat_iconv.h -I${LIMBO_JNI_ROOT}/compat/musl -I${LIMBO_JNI_ROOT}/compat/musl/include " \
+		LDFLAGS=" $(ARCH_LD_CLANG_FLAGS) $(ARCH_LD_FLAGS) $(SYS_ROOT) -L${LIMBO_JNI_ROOT}/../obj/local/$(APP_ABI) \
+		-lc -lcompat-musl -llog -lcompat-limbo " \
+		-lgcc \
+		LIBFFI_CFLAGS="-I${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/include " \
+		LIBFFI_LIBS="${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/.libs/libffi.a "; \
+		$(INSTALL_GLIB_LIBS); \
+	fi
 
 config-libslirp:
-	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ]; then \
-		echo "Configuring libslirp for QEMU 8.x"; \
+	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ] || [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
+		echo "Configuring libslirp for QEMU $(USE_QEMU_VERSION)"; \
 	fi
 
 libslirp:
-	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ]; then \
+	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ] || [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
 		bash $(LIMBO_PRJ_ROOT)/scripts/build_libslirp.sh $(LIMBO_JNI_ROOT) $(NDK_ROOT) $(APP_ABI); \
 	else \
 		echo "libslirp not needed for QEMU $(USE_QEMU_VERSION)"; \

@@ -11,10 +11,13 @@ JNI=$(cd "$1" && pwd)
 ABI=${2:-arm64-v8a}
 OBJ="$JNI/../obj/local/$ABI"
 PC="$JNI/pc"
+# glib source dir: "glib" (autotools 2.56 for QEMU5/8) or "glib276" (meson for QEMU9+)
+GLIB_DIR=${GLIB_DIR:-glib}
+GLIB="$JNI/$GLIB_DIR"
 mkdir -p "$PC"
 
 cat > "$PC/glib-2.0.pc" <<EOF
-prefix=$JNI/glib
+prefix=$GLIB
 exec_prefix=\${prefix}
 libdir=$OBJ
 includedir=\${prefix}
@@ -24,6 +27,33 @@ Description: GLib (Limbo self-built)
 Version: 2.56.1
 Libs: -L\${libdir} -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo -lcompat-iconv
 Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/gmodule -I\${includedir}/io -I\${includedir}/android -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
+EOF
+
+# QEMU 11 requires gmodule; point it at the same glib build
+cat > "$PC/gmodule-export-2.0.pc" <<EOF
+prefix=$GLIB
+exec_prefix=\${prefix}
+libdir=$OBJ
+includedir=\${prefix}
+
+Name: gmodule-export-2.0
+Description: GModule (Limbo self-built)
+Version: 2.56.1
+Libs: -L\${libdir} -lgmodule-2.0 -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo
+Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/gmodule -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
+EOF
+
+cat > "$PC/gmodule-no-export-2.0.pc" <<EOF
+prefix=$GLIB
+exec_prefix=\${prefix}
+libdir=$OBJ
+includedir=\${prefix}
+
+Name: gmodule-no-export-2.0
+Description: GModule (Limbo self-built)
+Version: 2.56.1
+Libs: -L\${libdir} -lgmodule-2.0 -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo
+Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/gmodule -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
 EOF
 
 cat > "$PC/gthread-2.0.pc" <<EOF
