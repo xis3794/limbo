@@ -11,9 +11,27 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "limbo_compat_filesystem.h"
+
+/* ------------------------------------------------------------------ */
+/* C23 sized-free helpers (bionic lacks free_sized/free_aligned_sized)*/
+/* glib 2.76 references them on C23-aware compilers.                   */
+/* ------------------------------------------------------------------ */
+void free_sized(void *ptr, size_t size)
+{
+    (void)size;
+    free(ptr);
+}
+
+void free_aligned_sized(void *ptr, size_t alignment, size_t size)
+{
+    (void)alignment;
+    (void)size;
+    free(ptr);
+}
 
 /* ------------------------------------------------------------------ */
 /* ld --wrap entry points: redirect QEMU's file IO to Limbo's          */
