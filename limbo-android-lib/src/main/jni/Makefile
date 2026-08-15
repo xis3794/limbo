@@ -232,6 +232,10 @@ config-libslirp:
 	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ] || [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
 		echo "Configuring libslirp for QEMU $(USE_QEMU_VERSION)"; \
 	fi
+	@if [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
+		echo "Creating libcap-ng.so stub for virtfs"; \
+		cp -f $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libcompat-limbo.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libcap-ng.so; \
+	fi
 
 libslirp:
 	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ] || [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
