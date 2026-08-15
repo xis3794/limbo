@@ -84,5 +84,19 @@ cp -f "$GLIB_BUILD"/glib/libglib-2.0.so.0.* "$OBJ/libglib-2.0.so" 2>/dev/null ||
   cp -f "$GLIB_BUILD"/glib/libglib-2.0.so "$OBJ/"
 cp -f "$GLIB_BUILD"/gmodule/libgmodule-2.0.so.0.* "$OBJ/libgmodule-2.0.so" 2>/dev/null || \
   cp -f "$GLIB_BUILD"/gmodule/libgmodule-2.0.so "$OBJ/" 2>/dev/null || true
-ls -la "$OBJ"/libglib* "$OBJ"/libgmodule* 2>/dev/null || true
+
+# libglib-2.0.so has DT_NEEDED on libpcre2-8.so.0 (meson wrap build) and
+# libintl.so.8 (NDK stub); both must be shipped in the APK or dlopen fails.
+PCRE2_SO=$(find "$GLIB_BUILD/subprojects" -name 'libpcre2-8.so*' 2>/dev/null | head -1)
+if [ -n "$PCRE2_SO" ]; then
+  cp -f "$PCRE2_SO" "$OBJ/libpcre2-8.so.0"
+  echo "[OK] libpcre2-8.so.0 copied to $OBJ"
+else
+  echo "[WARN] pcre2 shared lib not found in subprojects"
+fi
+# intl: NDK provides a stub libintl.so; use musl's real implementation
+# (already inside libcompat-musl.so) as libintl.so.8
+cp -f "$OBJ/libcompat-musl.so" "$OBJ/libintl.so.8"
+echo "[OK] libintl.so.8 created from libcompat-musl.so"
+ls -la "$OBJ"/libglib* "$OBJ"/libgmodule* "$OBJ"/libpcre2* "$OBJ"/libintl* 2>/dev/null || true
 echo "[OK] glib2.76 built: $OBJ/libglib-2.0.so"
