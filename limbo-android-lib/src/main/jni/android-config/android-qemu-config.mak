@@ -172,10 +172,13 @@ SPICE = --disable-spice
 #TCI
 #TCI = --enable-tcg-interpreter
 
+# Note: only clang-compatible warning flags here. GCC-only flags like
+# -Wno-maybe-uninitialized / -Wunused-but-set-variable are not understood
+# by clang and break meson 1.11 compiler probes (it appends
+# -Werror=unknown-warning-option which overrides -Wno-unknown-warning-option).
 WARNING_FLAGS = -Wno-unknown-warning-option \
 	-Wno-redundant-decls -Wno-unused-variable \
-	-Wno-maybe-uninitialized -Wno-unused-function \
-	-Wunused-but-set-variable
+	-Wno-unused-function
 	
 ifeq ($(APP_ABI), armeabi)
     QEMU_HOST_CPU = arm
