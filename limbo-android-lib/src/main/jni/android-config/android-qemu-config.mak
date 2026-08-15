@@ -111,8 +111,10 @@ MISC += --disable-tools --disable-libnfs
 MISC +=  --disable-qom-cast-debug
 MISC += --disable-libnfs --disable-libiscsi --disable-docs
 MISC += --disable-rdma --disable-brlapi --disable-curl
+# libattr: ENABLED - bionic libc provides getxattr/setxattr, so QEMU's
+# virtfs/9p libattr probe passes without installing real libattr
 MISC += --disable-vde --disable-netmap --disable-cap-ng
-MISC += --disable-attr --disable-pie
+MISC += --enable-attr --disable-pie
 MISC += --disable-rbd --disable-lzo  --disable-snappy 
 MISC += --disable-seccomp --disable-bzip2
 MISC += --disable-vte

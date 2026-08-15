@@ -28,6 +28,11 @@ MISC += --disable-guest-agent
 #       force PIC for static libs (needed to link .so)
 MISC += -Db_staticpic=true
 
+# 11.x: allow meson wrap downloads; fdt must use internal dtc sources
+# (wrap_mode defaults to nodownload which forces system libfdt)
+MISC += -Dwrap_mode=default
+FDT ?= --enable-fdt=internal
+
 # 11.x: MonitorClass has printf/fprintf members; skip logutils printf macros
 ARCH_CFLAGS += -D__LIMBO_QEMU11__
 
