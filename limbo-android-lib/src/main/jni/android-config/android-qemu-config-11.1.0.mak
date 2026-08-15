@@ -30,3 +30,6 @@ MISC += -Db_staticpic=true
 
 # 11.x: MonitorClass has printf/fprintf members; skip logutils printf macros
 ARCH_CFLAGS += -D__LIMBO_QEMU11__
+
+# 11.x: TCG plugins not needed (contrib/plugins fail linking on Android)
+MISC += --disable-plugins

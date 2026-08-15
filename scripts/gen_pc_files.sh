@@ -26,7 +26,7 @@ includedir=\${prefix}
 Name: glib-2.0
 Description: GLib (Limbo self-built)
 Version: $GLIB_VERSION
-Libs: -L\${libdir} -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo -lcompat-iconv
+Libs: -L\${libdir} -lglib-2.0 -L$OBJ -lcompat-musl -llog -lcompat-limbo
 Cflags: -I\${includedir} -I\${includedir}/glib -I\${includedir}/glib/glib -I\${includedir}/build -I\${includedir}/build/glib -I\${includedir}/gmodule -I\${includedir}/io -I\${includedir}/android -I$JNI/compat -I$JNI/compat/musl -I$JNI/compat/musl/include
 EOF
 
