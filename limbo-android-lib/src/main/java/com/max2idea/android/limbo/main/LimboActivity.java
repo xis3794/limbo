@@ -936,6 +936,20 @@ public class LimboActivity extends AppCompatActivity
      */
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Global crash logger for debugging (writes to /sdcard/Download/limbo_crash.txt)
+        try {
+            Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+                @Override
+                public void uncaughtException(Thread thread, Throwable throwable) {
+                    try {
+                        String trace = Log.getStackTraceString(throwable);
+                        FileUtils.saveFileContents("/sdcard/Download/limbo_crash.txt", trace);
+                    } catch (Exception ignored) {
+                    }
+                }
+            });
+        } catch (Exception ignored) {
+        }
         super.onCreate(savedInstanceState);
         setupAppEnvironment();
         clearNotifications();
@@ -1153,35 +1167,63 @@ public class LimboActivity extends AppCompatActivity
         });
         t.start();
     }
-
     //XXX: this needs to be called from the main thread otherwise
     //  qemu crashes when it is started later
+    protected void logNative(String msg) {
+        try {
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(
+                    "/sdcard/Download/limbo_load.txt", true);
+            fos.write((msg + "\n").getBytes());
+            fos.close();
+        } catch (Exception e) {
+        }
+    }
+
     public void setupNativeLibs() {
         if (libLoaded)
             return;
-        //Compatibility lib
-        System.loadLibrary("compat-limbo");
+        try {
+            //Compatibility lib
+            logNative("loading compat-limbo");
+            System.loadLibrary("compat-limbo");
+            logNative("OK compat-limbo");
 
-        //Glib deps
-        System.loadLibrary("compat-musl");
+            //Glib deps
+            logNative("loading compat-musl");
+            System.loadLibrary("compat-musl");
+            logNative("OK compat-musl");
 
-        //Glib
-        System.loadLibrary("glib-2.0");
+            //Glib
+            logNative("loading glib-2.0");
+            System.loadLibrary("glib-2.0");
+            logNative("OK glib-2.0");
 
-        //Pixman for qemu
-        System.loadLibrary("pixman-1");
+            //Pixman for qemu
+            logNative("loading pixman-1");
+            System.loadLibrary("pixman-1");
+            logNative("OK pixman-1");
 
-        // SDL library
-        if (Config.enable_SDL) {
-            if (Build.VERSION.SDK_INT >= 26)
-                System.loadLibrary("compat-SDL2-addons");
-            System.loadLibrary("SDL2");
+            // SDL library
+            if (Config.enable_SDL) {
+                if (Build.VERSION.SDK_INT >= 26)
+                    System.loadLibrary("compat-SDL2-addons");
+                logNative("loading SDL2");
+                System.loadLibrary("SDL2");
+                logNative("OK SDL2");
+            }
+
+            logNative("loading compat-SDL2-ext");
+            System.loadLibrary("compat-SDL2-ext");
+            logNative("OK compat-SDL2-ext");
+
+            //Limbo needed for vmexecutor
+            logNative("loading limbo");
+            System.loadLibrary("limbo");
+            logNative("OK limbo");
+        } catch (UnsatisfiedLinkError e) {
+            logNative("CRASH: " + e.toString());
+            throw e;
         }
-
-        System.loadLibrary("compat-SDL2-ext");
-
-        //Limbo needed for vmexecutor
-        System.loadLibrary("limbo");
 
         // qemu arch specific lib
         loadQEMULib();

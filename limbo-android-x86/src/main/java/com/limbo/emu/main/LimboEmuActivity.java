@@ -54,10 +54,15 @@ public class LimboEmuActivity extends LimboActivity {
     }
 
     protected void loadQEMULib() {
+        logNative("loading qemu-system-i386");
         try {
             System.loadLibrary("qemu-system-i386");
+            logNative("OK qemu-system-i386");
         } catch (Error ex) {
+            logNative("i386 failed: " + ex.toString());
+            logNative("loading qemu-system-x86_64");
             System.loadLibrary("qemu-system-x86_64");
+            logNative("OK qemu-system-x86_64");
         }
 
     }
