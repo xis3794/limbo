@@ -10,6 +10,7 @@
  */
 #include <errno.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <pthread.h>
 #include <time.h>
 #include <dlfcn.h>
@@ -22,6 +23,22 @@ int close_range(unsigned int first, unsigned int last, int flags)
     (void)flags;
     errno = ENOSYS;
     return -1;
+}
+
+/* C23 sized-free helpers (bionic lacks free_sized/free_aligned_sized).
+ * glib 2.76 references them on C23-aware compilers; provide them on
+ * libglib's DT_NEEDED chain (libcompat-musl). */
+void free_sized(void *ptr, size_t size)
+{
+    (void)size;
+    free(ptr);
+}
+
+void free_aligned_sized(void *ptr, size_t alignment, size_t size)
+{
+    (void)alignment;
+    (void)size;
+    free(ptr);
 }
 
 static int rwlock_call(const char *sym, pthread_rwlock_t *lock,

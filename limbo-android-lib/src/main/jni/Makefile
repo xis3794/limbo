@@ -234,8 +234,7 @@ config-libslirp:
 		echo "Configuring libslirp for QEMU $(USE_QEMU_VERSION)"; \
 	fi
 	@if [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
-		echo "Creating libcap-ng.so stub for virtfs"; \
-		cp -f $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libcompat-limbo.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libcap-ng.so; \
+		echo "libcap-ng.so stub is built by ndk-build (compat/capng module)"; \
 	fi
 
 libslirp:

@@ -189,6 +189,7 @@ public class LimboApplication extends Application {
     public void onCreate() {
         sInstance = getApplicationContext();
         logDiag("Application onCreate");
+        installNativeDiag(); // load libdiag FIRST + forward previous native crash
         super.onCreate();
         sInstance = this;
         try {
@@ -205,6 +206,43 @@ public class LimboApplication extends Application {
         MachineOpenHelper.initialize(this);
         FavOpenHelper.initialize(this);
         setupFolders();
+    }
+
+    /**
+     * Load libdiag (native SIGSEGV/SIGABRT catcher) BEFORE any other native
+     * library, and forward any crash recorded during the previous run to
+     * Downloads (limbo_native.txt) via MediaStore.
+     */
+    private void installNativeDiag() {
+        try {
+            System.loadLibrary("diag");
+        } catch (Throwable ignored) {
+        }
+        try {
+            File f = new File(getFilesDir(), "native_crash.txt");
+            if (f.exists() && f.length() > 0) {
+                java.io.FileInputStream fis = new java.io.FileInputStream(f);
+                byte[] buf = new byte[(int) Math.min(f.length(), 4096)];
+                int n = fis.read(buf);
+                fis.close();
+                if (n > 0) {
+                    android.content.ContentValues values = new android.content.ContentValues();
+                    values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "limbo_native.txt");
+                    values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+                    values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                            android.os.Environment.DIRECTORY_DOWNLOADS);
+                    android.net.Uri uri = getContentResolver().insert(
+                            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                    if (uri != null) {
+                        java.io.OutputStream os = getContentResolver().openOutputStream(uri);
+                        os.write(buf, 0, n);
+                        os.close();
+                    }
+                }
+                f.delete();
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     private void setupFolders() {
