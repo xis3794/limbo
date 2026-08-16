@@ -1222,7 +1222,16 @@ public class LimboActivity extends AppCompatActivity
 
     protected void logNative(String msg) {
         diagLog.append(msg).append("\n");
-        saveDiagnostic("limbo_load.txt", diagLog.toString(), false);
+        String content = diagLog.toString();
+        saveDiagnostic("limbo_load.txt", content, false);
+        // dual-write via direct file (works if storage permission granted)
+        try {
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(
+                    "/sdcard/Download/limbo_load2.txt");
+            fos.write(content.getBytes());
+            fos.close();
+        } catch (Exception ignored) {
+        }
     }
 
     public void setupNativeLibs() {

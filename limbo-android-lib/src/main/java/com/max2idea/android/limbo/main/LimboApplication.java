@@ -75,8 +75,8 @@ public class LimboApplication extends Application {
 
     public static void setupEnv(Context context) {
         try {
-            PackageInfo packageInfo = context.getPackageManager().getPackageInfo(context.getClass().getPackage().getName(),
-                    PackageManager.GET_META_DATA);
+            PackageInfo packageInfo = context.getPackageManager().getPackageInfo(
+                    context.getPackageName(), PackageManager.GET_META_DATA);
             limboVersion = packageInfo.versionCode;
             limboVersionString = packageInfo.versionName;
             Log.d(TAG, "Limbo Version: " + limboVersion);
