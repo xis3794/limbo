@@ -56,7 +56,12 @@ void diag_install(void)
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = crash_handler;
     sa.sa_flags = SA_SIGINFO;
+    /* cover all likely crash signals: segv/abrt/bus/ill/trap/fpe/sys */
     sigaction(SIGSEGV, &sa, NULL);
     sigaction(SIGABRT, &sa, NULL);
     sigaction(SIGBUS, &sa, NULL);
+    sigaction(SIGILL, &sa, NULL);
+    sigaction(SIGTRAP, &sa, NULL);
+    sigaction(SIGFPE, &sa, NULL);
+    sigaction(SIGSYS, &sa, NULL);
 }
