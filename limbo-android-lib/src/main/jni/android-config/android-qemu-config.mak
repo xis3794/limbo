@@ -111,10 +111,9 @@ MISC += --disable-tools --disable-libnfs
 MISC +=  --disable-qom-cast-debug
 MISC += --disable-libnfs --disable-libiscsi --disable-docs
 MISC += --disable-rdma --disable-brlapi --disable-curl
-# libattr/cap-ng: ENABLED - bionic provides xattr, cap-ng is stubbed in
-# compat (limbo_compat_stubs.c + libcap-ng.so) for virtfs/9p
+# libattr: ENABLED - bionic provides xattr; cap-ng is 11.x-only (stubbed)
 MISC += --disable-vde --disable-netmap
-MISC += --enable-cap-ng --enable-attr --disable-pie
+MISC += --disable-cap-ng --enable-attr --disable-pie
 MISC += --disable-rbd --disable-lzo  --disable-snappy 
 MISC += --disable-seccomp --disable-bzip2
 MISC += --disable-vte

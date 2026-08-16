@@ -28,8 +28,6 @@ on:
         options:
           - 'x86_64-softmmu'
           - 'aarch64-softmmu'
-  push:
-    branches: [ master ]
 
 jobs:
   build:

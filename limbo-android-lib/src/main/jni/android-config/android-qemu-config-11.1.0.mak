@@ -38,3 +38,6 @@ ARCH_CFLAGS += -D__LIMBO_QEMU11__
 
 # 11.x: TCG plugins not needed (contrib/plugins fail linking on Android)
 MISC += --disable-plugins
+
+# 11.x: cap-ng stub (cap-ng.h + capng funcs + libcap-ng.so) for virtfs
+MISC += --enable-cap-ng
