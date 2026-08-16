@@ -110,7 +110,14 @@ echo "[OK] libintl.so created from libcompat-musl.so"
 if command -v patchelf >/dev/null 2>&1; then
   patchelf --replace-needed libintl.so.8 libintl.so "$OBJ/libglib-2.0.so" 2>/dev/null || true
   patchelf --replace-needed libpcre2-8.so.0 libpcre2-8.so "$OBJ/libglib-2.0.so" 2>/dev/null || true
-  echo "[OK] libglib DT_NEEDED patched to unversioned names"
+  # Clear version info: NDK r23 libc version-binds glib to internal symbols
+  # like _rwlock_trywrlock@LIBC that older Android libc does not export.
+  # Our compat stub provides them unversioned; clearing lets the linker
+  # resolve them from libcompat-limbo.so at runtime.
+  patchelf --clear-version-info "$OBJ/libglib-2.0.so" 2>/dev/null || true
+  patchelf --clear-version-info "$OBJ/libpcre2-8.so" 2>/dev/null || true
+  patchelf --clear-version-info "$OBJ/libgmodule-2.0.so" 2>/dev/null || true
+  echo "[OK] libglib DT_NEEDED patched + version info cleared"
 else
   echo "[WARN] patchelf not available; DT_NEEDED not patched"
 fi

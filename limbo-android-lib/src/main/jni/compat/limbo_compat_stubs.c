@@ -12,10 +12,28 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "limbo_compat_filesystem.h"
 #include "cap-ng.h"
+
+/* ------------------------------------------------------------------ */
+/* bionic internal rwlock symbols (glibc-style "_rwlock_*" aliases).    */
+/* NDK r23 libc binds glib 2.76 to these versioned names, but older     */
+/* Android libc does not export them -> provide forwards to the public  */
+/* pthread_rwlock_* API (available on all Android versions).            */
+/* ------------------------------------------------------------------ */
+int _rwlock_init(pthread_rwlock_t *lock) { return pthread_rwlock_init(lock, NULL); }
+int _rwlock_destroy(pthread_rwlock_t *lock) { return pthread_rwlock_destroy(lock); }
+int _rwlock_rdlock(pthread_rwlock_t *lock) { return pthread_rwlock_rdlock(lock); }
+int _rwlock_wrlock(pthread_rwlock_t *lock) { return pthread_rwlock_wrlock(lock); }
+int _rwlock_tryrdlock(pthread_rwlock_t *lock) { return pthread_rwlock_tryrdlock(lock); }
+int _rwlock_trywrlock(pthread_rwlock_t *lock) { return pthread_rwlock_trywrlock(lock); }
+int _rwlock_unlock(pthread_rwlock_t *lock) { return pthread_rwlock_unlock(lock); }
+int _rwlock_timedrdlock(pthread_rwlock_t *lock, const struct timespec *t) { return pthread_rwlock_timedrdlock(lock, t); }
+int _rwlock_timedwrlock(pthread_rwlock_t *lock, const struct timespec *t) { return pthread_rwlock_timedwrlock(lock, t); }
 
 /* ------------------------------------------------------------------ */
 /* libcap-ng stub: bionic has no libcap-ng; QEMU virtfs/9p needs it.  */
