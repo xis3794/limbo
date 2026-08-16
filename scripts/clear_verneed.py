@@ -82,20 +82,40 @@ def clear_version(path):
             cleared += 1
         off += 16 if is64 else 8
 
-    # zero .gnu.version section (SHT_GNU_versym = 0x6fffffff)
+    # zero .gnu.version entries ONLY for UNDEFINED symbols (imports).
+    # Exported symbols keep their version definition indexes (DT_VERDEF stays).
+    # SHT_DYNSYM=11, SHT_GNU_versym=0x6fffffff
+    dynsym_off = dynsym_entsize = dynsym_count = None
     for i in range(e_shnum):
         soff = e_shoff + i * e_shentsize
         if is64:
             sh_type = unpack('<I', soff + 4)
             sh_offset = unpack('<Q', soff + 24)
             sh_size = unpack('<Q', soff + 32)
+            sh_link = unpack('<I', soff + 40)
         else:
             sh_type = unpack('<I', soff + 4)
             sh_offset = unpack('<I', soff + 16)
             sh_size = unpack('<I', soff + 20)
-        if sh_type == 0x6fffffff:
-            data[sh_offset:sh_offset + sh_size] = b'\x00' * sh_size
-            cleared += 1
+            sh_link = unpack('<I', soff + 24)
+        if sh_type == 11:  # SHT_DYNSYM
+            dynsym_off = sh_offset
+            dynsym_entsize = unpack('<Q', soff + 56) if is64 else unpack('<I', soff + 44)
+            dynsym_count = sh_size // dynsym_entsize
+        if sh_type == 0x6fffffff:  # SHT_GNU_versym
+            versym_off = sh_offset
+            versym_size = sh_size
+
+    if dynsym_off is not None and versym_off is not None:
+        cleared_versym = 0
+        for i in range(dynsym_count):
+            eoff = dynsym_off + i * dynsym_entsize
+            st_shndx = unpack('<H', eoff + 6) if is64 else unpack('<H', eoff + 6)
+            if st_shndx == 0:  # SHN_UNDEF -> imported symbol
+                vs_off = versym_off + i * 2
+                struct.pack_into('<H', data, vs_off, 0)
+                cleared_versym += 1
+        cleared += cleared_versym
 
     f.seek(0)
     f.write(data)
