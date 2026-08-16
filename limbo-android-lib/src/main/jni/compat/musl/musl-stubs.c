@@ -41,6 +41,13 @@ void free_aligned_sized(void *ptr, size_t alignment, size_t size)
     free(ptr);
 }
 
+/* glibc internal helper; some bionic variants may not export it.
+ * glib references it via MB_CUR_MAX. Return 1 (single-byte locale). */
+int __ctype_get_mb_cur_max(void)
+{
+    return 1;
+}
+
 static int rwlock_call(const char *sym, pthread_rwlock_t *lock,
                        const struct timespec *t)
 {

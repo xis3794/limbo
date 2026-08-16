@@ -110,6 +110,14 @@ echo "[OK] libintl.so created from libcompat-musl.so"
 if command -v patchelf >/dev/null 2>&1; then
   patchelf --replace-needed libintl.so.8 libintl.so "$OBJ/libglib-2.0.so" 2>/dev/null || true
   patchelf --replace-needed libpcre2-8.so.0 libpcre2-8.so "$OBJ/libglib-2.0.so" 2>/dev/null || true
+  # Huawei linker may resolve DT_NEEDED by file name -> use the unversioned
+  # name that actually exists in the APK (libglib-2.0.so)
+  patchelf --replace-needed libglib-2.0.so.0 libglib-2.0.so "$OBJ/libgmodule-2.0.so" 2>/dev/null || true
+  # libintl.so / libiconv.so are copies of libcompat-musl.so: fix their
+  # SONAME so the linker does not see several libs claiming to be
+  # libcompat-musl.so (some vendor linkers reject duplicate SONAMEs)
+  patchelf --set-soname libintl.so "$OBJ/libintl.so" 2>/dev/null || true
+  patchelf --set-soname libiconv.so "$OBJ/libiconv.so" 2>/dev/null || true
   echo "[OK] libglib DT_NEEDED patched to unversioned names"
 else
   echo "[WARN] patchelf not available; DT_NEEDED not patched"

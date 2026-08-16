@@ -311,6 +311,10 @@ _build-qemu: ndk
 		cp -f qemu/build/qemu-system-$(GUEST_SHORT).so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so; \
 		echo "[OK] QEMU8.x .so copied"; \
 		python3 $(LIMBO_PRJ_ROOT)/scripts/clear_verneed.py $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so || true; \
+		echo "[OK] DT_NEEDED glib -> unversioned name (Huawei linker compat)"; \
+		patchelf --replace-needed libglib-2.0.so.0 libglib-2.0.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so || true; \
+		echo "[OK] DT_NEEDED gmodule -> unversioned glib name"; \
+		patchelf --replace-needed libglib-2.0.so.0 libglib-2.0.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libgmodule-2.0.so || true; \
 	fi
 	$(INSTALL_LIBS)
 	$(RENAME_TUNCTL)
