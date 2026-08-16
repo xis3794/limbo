@@ -88,10 +88,16 @@ cp -f "$GLIB_BUILD"/gmodule/libgmodule-2.0.so.0.* "$OBJ/libgmodule-2.0.so" 2>/de
 # libglib-2.0.so has DT_NEEDED on libpcre2-8.so.0 (meson wrap build) and
 # libintl.so.8 (NDK stub). AGP only packages standard "lib*.so" names, so we
 # rename them and patch libglib's DT_NEEDED to the unversioned names.
-PCRE2_SO=$(find "$GLIB_BUILD/subprojects" -type f -name 'libpcre2-8.so*' 2>/dev/null | head -1)
+# pcre2's real .so is ~700KB; the 0-byte placeholder files must be skipped
+PCRE2_SO=$(find "$GLIB_BUILD/subprojects" -type f -name 'libpcre2-8.so*' -size +100k 2>/dev/null | head -1)
 if [ -n "$PCRE2_SO" ]; then
   cp -f "$PCRE2_SO" "$OBJ/libpcre2-8.so"
-  echo "[OK] libpcre2-8.so copied to $OBJ"
+  # sanity: must be a real ELF
+  if head -c4 "$OBJ/libpcre2-8.so" 2>/dev/null | grep -q ELF; then
+    echo "[OK] libpcre2-8.so copied to $OBJ ($(stat -c%s "$OBJ/libpcre2-8.so") bytes)"
+  else
+    echo "[WARN] libpcre2-8.so is not valid ELF!"
+  fi
 else
   echo "[WARN] pcre2 shared lib not found in subprojects"
 fi
