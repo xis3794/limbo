@@ -315,10 +315,6 @@ _build-qemu: ndk
 		patchelf --replace-needed libglib-2.0.so.0 libglib-2.0.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so || true; \
 		echo "[OK] DT_NEEDED gmodule -> unversioned glib name"; \
 		patchelf --replace-needed libglib-2.0.so.0 libglib-2.0.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libgmodule-2.0.so || true; \
-		echo "[OK] clear verneed on compat-musl/intl/iconv (Huawei linker fails on their verneed even for libc.so/LIBC)"; \
-		python3 $(LIMBO_PRJ_ROOT)/scripts/clear_verneed.py $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libcompat-musl.so || true; \
-		python3 $(LIMBO_PRJ_ROOT)/scripts/clear_verneed.py $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libintl.so || true; \
-		python3 $(LIMBO_PRJ_ROOT)/scripts/clear_verneed.py $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libiconv.so || true; \
 	fi
 	$(INSTALL_LIBS)
 	$(RENAME_TUNCTL)

@@ -101,10 +101,10 @@ if [ -n "$PCRE2_SO" ]; then
 else
   echo "[WARN] pcre2 shared lib not found in subprojects"
 fi
-# intl: NDK provides a stub libintl.so; use musl's real implementation
-# (already inside libcompat-musl.so) as libintl.so
-cp -f "$OBJ/libcompat-musl.so" "$OBJ/libintl.so"
-echo "[OK] libintl.so created from libcompat-musl.so"
+# intl: provided by the standalone ndk-build libintl.so module
+# (compat/intl - free_sized/close_range stubs). Do NOT overwrite it with
+# a copy of libcompat-musl.so.
+echo "[OK] libintl.so provided by ndk-build compat/intl module"
 
 # Patch DT_NEEDED entries so Android finds the unversioned names
 if command -v patchelf >/dev/null 2>&1; then
