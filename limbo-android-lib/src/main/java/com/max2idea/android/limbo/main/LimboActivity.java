@@ -943,7 +943,26 @@ public class LimboActivity extends AppCompatActivity
                 public void uncaughtException(Thread thread, Throwable throwable) {
                     try {
                         String trace = Log.getStackTraceString(throwable);
-                        FileUtils.saveFileContents("/sdcard/Download/limbo_crash.txt", trace);
+                        // write via MediaStore (public Downloads, no permission needed on 10+)
+                        try {
+                            if (Build.VERSION.SDK_INT >= 29) {
+                                android.content.ContentValues values = new android.content.ContentValues();
+                                values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "limbo_crash.txt");
+                                values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+                                values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                                        android.os.Environment.DIRECTORY_DOWNLOADS);
+                                android.net.Uri uri = getContentResolver().insert(
+                                        android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                                if (uri != null) {
+                                    java.io.OutputStream os = getContentResolver().openOutputStream(uri);
+                                    os.write(trace.getBytes());
+                                    os.close();
+                                }
+                            } else {
+                                FileUtils.saveFileContents("/sdcard/Download/limbo_crash.txt", trace);
+                            }
+                        } catch (Exception ignored) {
+                        }
                     } catch (Exception ignored) {
                     }
                 }
@@ -1169,14 +1188,41 @@ public class LimboActivity extends AppCompatActivity
     }
     //XXX: this needs to be called from the main thread otherwise
     //  qemu crashes when it is started later
-    protected void logNative(String msg) {
+    private final StringBuilder diagLog = new StringBuilder();
+
+    protected void saveDiagnostic(String name, String content, boolean append) {
         try {
-            java.io.FileOutputStream fos = new java.io.FileOutputStream(
-                    "/sdcard/Download/limbo_load.txt", true);
-            fos.write((msg + "\n").getBytes());
-            fos.close();
+            if (Build.VERSION.SDK_INT >= 29) {
+                // MediaStore: write to public Downloads without storage permission
+                android.content.ContentValues values = new android.content.ContentValues();
+                values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name);
+                values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+                values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                        android.os.Environment.DIRECTORY_DOWNLOADS);
+                android.net.Uri uri = getContentResolver().insert(
+                        android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (uri != null) {
+                    java.io.OutputStream os = getContentResolver().openOutputStream(uri);
+                    os.write(content.getBytes());
+                    os.close();
+                }
+            } else {
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(
+                        "/sdcard/Download/" + name, append);
+                fos.write(content.getBytes());
+                fos.close();
+            }
         } catch (Exception e) {
+            try {
+                Log.e("LimboDiag", "saveDiagnostic failed: " + e);
+            } catch (Exception ignored) {
+            }
         }
+    }
+
+    protected void logNative(String msg) {
+        diagLog.append(msg).append("\n");
+        saveDiagnostic("limbo_load.txt", diagLog.toString(), false);
     }
 
     public void setupNativeLibs() {
