@@ -42,14 +42,10 @@ void free_aligned_sized(void *ptr, size_t alignment, size_t size)
     free(ptr);
 }
 
-/* glibc-style internal rwlock aliases; Huawei bionic may not export them.
- * Implemented with the standard pthread API (present in all bionic). */
-int _rwlock_init(pthread_rwlock_t *lock) { return pthread_rwlock_init(lock, NULL); }
-int _rwlock_destroy(pthread_rwlock_t *lock) { return pthread_rwlock_destroy(lock); }
-int _rwlock_rdlock(pthread_rwlock_t *lock) { return pthread_rwlock_rdlock(lock); }
-int _rwlock_wrlock(pthread_rwlock_t *lock) { return pthread_rwlock_wrlock(lock); }
-int _rwlock_tryrdlock(pthread_rwlock_t *lock) { return pthread_rwlock_tryrdlock(lock); }
-int _rwlock_trywrlock(pthread_rwlock_t *lock) { return pthread_rwlock_trywrlock(lock); }
-int _rwlock_unlock(pthread_rwlock_t *lock) { return pthread_rwlock_unlock(lock); }
-int _rwlock_timedrdlock(pthread_rwlock_t *lock, const struct timespec *t) { return pthread_rwlock_timedrdlock(lock, t); }
-int _rwlock_timedwrlock(pthread_rwlock_t *lock, const struct timespec *t) { return pthread_rwlock_timedwrlock(lock, t); }
+/* NOTE: _rwlock_* stubs are NOT needed here. glib 2.76 references the
+ * standard pthread_rwlock_trywrlock etc. (verified in the built .so's
+ * undef table after clear_verneed), which libc.so exports on every
+ * Android/HarmonyOS. Adding pthread_rwlock_* references here changed the
+ * verneed layout and broke dlopen on Huawei ("cannot find ... from
+ * verneed[0]"). Keep this library's symbol set identical to the working
+ * QEMU 8.0.5 build. */
