@@ -62,7 +62,13 @@ def clear_version(path):
         print('[WARN] %s: no PT_DYNAMIC' % path)
         return False
 
-    # zero DT_VERNEED (0x6ffffffe) and DT_VERNEEDNUM (0x6fffffff)
+    # zero DT_VERNEED (0x6ffffffe), DT_VERNEEDNUM (0x6fffffff) and
+    # DT_VERSYM (0x6ffffff0) - turn each whole entry into DT_NULL.
+    # All three live at the END of the dynamic table (right before the
+    # terminator NULL) in GNU toolchain output, so zeroing them cannot
+    # truncate earlier entries (SYMTAB/STRTAB/NEEDED etc. stay intact).
+    # Result: the library has NO version table at all (classic .so style),
+    # which every linker - including vendor/Huawei ones - handles fine.
     off = dyn_off
     cleared = 0
     while off < dyn_off + dyn_size:
@@ -72,9 +78,8 @@ def clear_version(path):
             d_tag = unpack('<i', off)
         if d_tag == 0:
             break
-        if d_tag in (0x6ffffffe, 0x6fffffff):
-            # turn the whole entry into DT_NULL so the linker stops here
-            # (VERNEED/VERNEEDNUM sit at the end of the dynamic table)
+        if d_tag in (0x6ffffff0, 0x6ffffffe, 0x6fffffff):
+            # VERSYM / VERNEED / VERNEEDNUM -> DT_NULL
             if is64:
                 struct.pack_into('<qQ', data, off, 0, 0)
             else:
