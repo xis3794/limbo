@@ -33,7 +33,11 @@ const char *capng_capability_to_name(unsigned int capability)
 
 int capng_getpid(void)
 {
-    return getpid();
+    /* Do NOT call getpid(): it adds a getpid@LIBC versioned reference that
+     * some Huawei/HarmonyOS libc does not export (this broke dlopen of
+     * libcompat-limbo.so on those devices). QEMU does not depend on the
+     * value returned here. */
+    return 0;
 }
 
 void capng_setpid(int pid)
