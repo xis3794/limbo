@@ -1266,9 +1266,12 @@ public class LimboActivity extends AppCompatActivity
             logNative("loading limbo");
             System.loadLibrary("limbo");
             logNative("OK limbo");
-        } catch (UnsatisfiedLinkError e) {
+        } catch (Throwable e) {
             logNative("CRASH: " + e.toString());
-            throw e;
+            if (e instanceof Error) {
+                throw (Error) e;
+            }
+            throw (RuntimeException) e;
         }
 
         // qemu arch specific lib
