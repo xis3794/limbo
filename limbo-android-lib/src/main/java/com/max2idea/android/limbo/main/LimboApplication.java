@@ -42,6 +42,25 @@ import java.io.IOException;
  */
 public class LimboApplication extends Application {
     private static final String TAG = "LimboApplication";
+
+    public static void logDiag(String msg) {
+        try {
+            android.content.ContentValues values = new android.content.ContentValues();
+            values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "limbo_app.txt");
+            values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+            values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                    android.os.Environment.DIRECTORY_DOWNLOADS);
+            android.net.Uri uri = getInstance().getContentResolver().insert(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (uri != null) {
+                java.io.OutputStream os = getInstance().getContentResolver().openOutputStream(uri);
+                os.write((msg + "\n").getBytes());
+                os.close();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     //Do not update these directly, see inherited project java files
     public static Config.Arch arch;
     private static Context sInstance;
@@ -168,12 +187,20 @@ public class LimboApplication extends Application {
 
     @Override
     public void onCreate() {
+        sInstance = getApplicationContext();
+        logDiag("Application onCreate");
         super.onCreate();
         sInstance = this;
         try {
             Class.forName("android.os.AsyncTask");
         } catch (Throwable ignore) {
             // ignored
+        }
+        try {
+            setupEnv(this);
+            logDiag("Application setupEnv OK");
+        } catch (Exception e) {
+            logDiag("Application setupEnv FAIL: " + e);
         }
         MachineOpenHelper.initialize(this);
         FavOpenHelper.initialize(this);
