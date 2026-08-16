@@ -6,7 +6,8 @@ LOCAL_ARM_MODE:= $(APP_ARM_MODE)
 
 LOCAL_SRC_FILES := \
     $(LOCAL_PATH)/../musl/musl-locale/iconv.c \
-    $(LOCAL_PATH)/../musl/musl-locale/intl.c
+    $(LOCAL_PATH)/../musl/musl-locale/intl.c \
+    $(LOCAL_PATH)/../musl/musl-stubs.c
 
 LOCAL_MODULE := compat-musl
 
