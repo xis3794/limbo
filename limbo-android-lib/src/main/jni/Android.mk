@@ -3,6 +3,8 @@
 #dep libs
 include $(NDK_PROJECT_PATH)/jni/compat/musl/Android.mk
 include $(NDK_PROJECT_PATH)/jni/compat/Android.mk
+include $(NDK_PROJECT_PATH)/jni/compat/capng/Android.mk
+include $(NDK_PROJECT_PATH)/jni/compat/diag/Android.mk
 ifeq ($(USE_AAUDIO),true)
 	include $(NDK_PROJECT_PATH)/jni/compat/sdl-addons/Android.mk
 endif

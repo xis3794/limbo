@@ -7,6 +7,7 @@
  *
  * Only async-signal-safe calls are used inside the handler.
  */
+#define _GNU_SOURCE
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
