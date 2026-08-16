@@ -16,5 +16,6 @@ LOCAL_C_INCLUDES :=			\
 
 LOCAL_ARM_MODE := $(ARM_MODE)
 LOCAL_LDFLAGS += -u iconv_open
+LOCAL_LDLIBS += -ldl
 include $(BUILD_SHARED_LIBRARY)
 
