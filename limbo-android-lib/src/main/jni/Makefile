@@ -311,6 +311,7 @@ _build-qemu: ndk
 	@if [ -f qemu/build/qemu-system-$(GUEST_SHORT).so ]; then \
 		cp -f qemu/build/qemu-system-$(GUEST_SHORT).so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so; \
 		echo "[OK] QEMU8.x .so copied"; \
+		python3 $(LIMBO_PRJ_ROOT)/scripts/clear_verneed.py $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so || true; \
 	fi
 	$(INSTALL_LIBS)
 	$(RENAME_TUNCTL)
