@@ -15,6 +15,12 @@ endif
 #Don't remove this
 APP_CFLAGS += -include $(LOGUTILS)
 APP_LDFLAGS += -llog
+# Huawei/HarmonyOS linker reads section data using the FILE offset while
+# the .so is already mapped by segment virtual address. Old linkers kept
+# vaddr==offset so it worked; lld's default -rosegment makes them differ
+# and breaks dynstr/verneed parsing on those devices. Restore the classic
+# layout so sh_addr == sh_offset everywhere.
+APP_LDFLAGS += -Wl,--no-rosegment
 ifeq ($(USE_GCC),true)
 	APP_CFLAGS +=-std=gnu99
 endif

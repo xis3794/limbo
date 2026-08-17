@@ -70,7 +70,7 @@ sed -i 's|^if have_func_kqueue and have_func_kevent$|if false # Limbo: no kqueue
 meson setup "$GLIB_BUILD" . --cross-file "$JNI/glib-cross.txt" \
   --default-library=shared -Dprefix=/usr \
   -Dc_args="-I$JNI/compat/musl/include -Wno-unknown-warning-option -Wno-error=implicit-function-declaration" \
-  -Dc_link_args="-L$OBJ -lcompat-musl -llog -Wl,-z,undefs" \
+  -Dc_link_args="-L$OBJ -lcompat-musl -llog -Wl,-z,undefs -Wl,--no-rosegment" \
   -Dlibmount=disabled -Dselinux=disabled -Ddtrace=false \
   -Dsystemtap=false -Dgtk_doc=false -Dman=false \
   -Dtests=false -Dinstalled_tests=false \
@@ -115,15 +115,9 @@ else
   echo "[WARN] patchelf not available; DT_NEEDED not patched"
 fi
 
-# Clear ELF versioning: Huawei linker cannot resolve versioned refs whose
-# verdef names differ from its libc (e.g. _rwlock_trywrlock vs
-# pthread_rwlock_trywrlock). Make every ref unversioned GLOBAL (versym=1)
-# so the linker resolves by name across all loaded libs; libintl provides
-# the extra stubs.
-python3 "$JNI/../../../../scripts/clear_verneed.py" \
-  "$OBJ/libglib-2.0.so" "$OBJ/libpcre2-8.so" "$OBJ/libgmodule-2.0.so" \
-  "$OBJ/libintl.so" || \
-  echo "[WARN] clear_verneed.py failed"
-echo "[OK] glib libs: versioning cleared (unversioned GLOBAL refs)"
+# KEEP original ELF versioning: with --no-rosegment (sh_addr==sh_offset),
+# Huawei linker reads dynstr/verneed correctly and resolves versioned refs
+# against libc like it does for all 8.0.5 libs (which work).
+echo "[OK] glib libs keep original ELF versioning (classic layout)"
 ls -la "$OBJ"/libglib* "$OBJ"/libgmodule* "$OBJ"/libpcre2* "$OBJ"/libintl* 2>/dev/null || true
 echo "[OK] glib2.76 built: $OBJ/libglib-2.0.so"
