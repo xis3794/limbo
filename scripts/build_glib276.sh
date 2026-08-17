@@ -110,25 +110,20 @@ echo "[OK] libintl.so provided by ndk-build compat/intl module"
 if command -v patchelf >/dev/null 2>&1; then
   patchelf --replace-needed libintl.so.8 libintl.so "$OBJ/libglib-2.0.so" 2>/dev/null || true
   patchelf --replace-needed libpcre2-8.so.0 libpcre2-8.so "$OBJ/libglib-2.0.so" 2>/dev/null || true
-  # Huawei linker resolves versioned refs ONLY inside the verneed-listed
-  # library (libc.so). NDK r23's meson linking binds pthread_rwlock_* to
-  # the verdef name _rwlock_* which Huawei libc does not export. Rename
-  # the refs back to the standard names (which Huawei libc DOES export).
-  for s in init destroy rdlock wrlock tryrdlock trywrlock unlock timedrdlock timedwrlock; do
-    patchelf --replace-symbol "_rwlock_$s" "pthread_rwlock_$s" "$OBJ/libglib-2.0.so" 2>/dev/null || true
-    patchelf --replace-symbol "_rwlock_$s" "pthread_rwlock_$s" "$OBJ/libgmodule-2.0.so" 2>/dev/null || true
-    patchelf --replace-symbol "_rwlock_$s" "pthread_rwlock_$s" "$OBJ/libpcre2-8.so" 2>/dev/null || true
-  done
-  echo "[OK] libglib DT_NEEDED patched + _rwlock_* renamed to pthread_rwlock_*"
+  echo "[OK] libglib DT_NEEDED patched"
 else
   echo "[WARN] patchelf not available; DT_NEEDED not patched"
 fi
 
-# Clear ELF version info: KEEP versioning! Huawei linker requires
-# versioned refs to match libc's versioned defs (8.0.5 libs are all
-# versioned and load fine). Unversioned refs fail with "cannot locate
-# symbol". glib 2.76's symbols use standard names (pthread_rwlock_*)
-# which libc exports, so versioning is safe.
-echo "[OK] glib libs keep original ELF versioning (Huawei compatible)"
+# Clear ELF versioning: Huawei linker cannot resolve versioned refs whose
+# verdef names differ from its libc (e.g. _rwlock_trywrlock vs
+# pthread_rwlock_trywrlock). Make every ref unversioned GLOBAL (versym=1)
+# so the linker resolves by name across all loaded libs; libintl provides
+# the extra stubs.
+python3 "$JNI/../../../../scripts/clear_verneed.py" \
+  "$OBJ/libglib-2.0.so" "$OBJ/libpcre2-8.so" "$OBJ/libgmodule-2.0.so" \
+  "$OBJ/libintl.so" || \
+  echo "[WARN] clear_verneed.py failed"
+echo "[OK] glib libs: versioning cleared (unversioned GLOBAL refs)"
 ls -la "$OBJ"/libglib* "$OBJ"/libgmodule* "$OBJ"/libpcre2* "$OBJ"/libintl* 2>/dev/null || true
 echo "[OK] glib2.76 built: $OBJ/libglib-2.0.so"

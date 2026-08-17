@@ -113,12 +113,19 @@ def clear_version(path):
 
     if dynsym_off is not None and versym_off is not None:
         cleared_versym = 0
-        for i in range(dynsym_count):
+        # start at i=1: symbol 0 is the reserved null symbol and must keep
+        # versym=0 (VER_NDX_LOCAL)
+        for i in range(1, dynsym_count):
             eoff = dynsym_off + i * dynsym_entsize
             st_shndx = unpack('<H', eoff + 6) if is64 else unpack('<H', eoff + 6)
             if st_shndx == 0:  # SHN_UNDEF -> imported symbol
                 vs_off = versym_off + i * 2
-                struct.pack_into('<H', data, vs_off, 0)
+                # IMPORTANT: use VER_NDX_GLOBAL (1), NOT VER_NDX_LOCAL (0).
+                # Some vendor (Huawei) linkers treat versym=0 as a LOCAL
+                # symbol and skip the lookup -> "cannot locate symbol".
+                # versym=1 means "unversioned global reference" -> the
+                # linker resolves it by name in the global namespace.
+                struct.pack_into('<H', data, vs_off, 1)
                 cleared_versym += 1
         cleared += cleared_versym
 
