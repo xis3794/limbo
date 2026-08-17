@@ -315,6 +315,8 @@ _build-qemu: ndk
 		patchelf --replace-needed libglib-2.0.so.0 libglib-2.0.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so || true; \
 		echo "[OK] DT_NEEDED gmodule -> unversioned glib name"; \
 		patchelf --replace-needed libglib-2.0.so.0 libglib-2.0.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libgmodule-2.0.so || true; \
+		echo "[OK] using prebuilt 8.0.5 libcompat-musl.so (Huawei linker cannot load any freshly-built musl: verneed[0] failure)"; \
+		cp -f $(LIMBO_PRJ_ROOT)/tools/prebuilt/libcompat-musl-805.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libcompat-musl.so; \
 	fi
 	$(INSTALL_LIBS)
 	$(RENAME_TUNCTL)
