@@ -123,11 +123,11 @@ else
   echo "[WARN] patchelf not available; DT_NEEDED not patched"
 fi
 
-# Clear ELF version info: NDK r23 libc version-binds glib to internal
-# symbols like _rwlock_trywrlock@LIBC that older Android libc does not export.
-# patchelf --clear-version-info is NOT supported -> use our python script.
-python3 "$JNI/../../../../scripts/clear_verneed.py" \
-  "$OBJ/libglib-2.0.so" "$OBJ/libpcre2-8.so" "$OBJ/libgmodule-2.0.so" || \
-  echo "[WARN] clear_verneed.py failed"
+# Clear ELF version info: KEEP versioning! Huawei linker requires
+# versioned refs to match libc's versioned defs (8.0.5 libs are all
+# versioned and load fine). Unversioned refs fail with "cannot locate
+# symbol". glib 2.76's symbols use standard names (pthread_rwlock_*)
+# which libc exports, so versioning is safe.
+echo "[OK] glib libs keep original ELF versioning (Huawei compatible)"
 ls -la "$OBJ"/libglib* "$OBJ"/libgmodule* "$OBJ"/libpcre2* "$OBJ"/libintl* 2>/dev/null || true
 echo "[OK] glib2.76 built: $OBJ/libglib-2.0.so"
