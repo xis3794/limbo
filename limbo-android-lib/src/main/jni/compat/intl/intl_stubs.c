@@ -37,3 +37,18 @@ void free_aligned_sized(void *ptr, size_t alignment, size_t size)
     (void)size;
     free(ptr);
 }
+
+/* ------------------------------------------------------------------ */
+/* g_libintl_* : glib 2.76 detects libintl via pkg-config and forwards
+ * its i18n calls to these names (glib/glib/ggettext.c). The 8.0.5 musl
+ * exports plain gettext/dgettext (which glib 2.56 used), but glib 2.76
+ * wants the g_libintl_ prefixed aliases. Provide harmless stubs.      */
+/* ------------------------------------------------------------------ */
+const char *g_libintl_gettext(const char *msgid) { return msgid; }
+const char *g_libintl_dgettext(const char *domain, const char *msgid) { (void)domain; return msgid; }
+const char *g_libintl_dcgettext(const char *domain, const char *msgid, int category) { (void)domain; (void)category; return msgid; }
+const char *g_libintl_ngettext(const char *msgid, const char *msgid_plural, unsigned long n) { return (n == 1) ? msgid : msgid_plural; }
+const char *g_libintl_dngettext(const char *domain, const char *msgid, const char *msgid_plural, unsigned long n) { (void)domain; return (n == 1) ? msgid : msgid_plural; }
+const char *g_libintl_textdomain(const char *domain) { return domain; }
+const char *g_libintl_bindtextdomain(const char *domain, const char *dir) { (void)dir; return domain; }
+const char *g_libintl_bind_textdomain_codeset(const char *domain, const char *codeset) { (void)domain; return codeset; }
