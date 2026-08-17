@@ -13,6 +13,8 @@
 #include <errno.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <time.h>
 
 /* close_range: only in bionic API 30+; some Huawei/HarmonyOS lack it */
 int close_range(unsigned int first, unsigned int last, int flags)
@@ -37,6 +39,24 @@ void free_aligned_sized(void *ptr, size_t alignment, size_t size)
     (void)size;
     free(ptr);
 }
+
+/* ------------------------------------------------------------------ */
+/* _rwlock_* internal aliases: NDK r23's libc version-binds
+ * pthread_rwlock_* to the internal underscore names (_rwlock_trywrlock)
+ * which Huawei's libc does NOT export. glib 2.76 linked against NDK r23
+ * references _rwlock_trywrlock@LIBC -> provide the underscore-named
+ * implementations here (on glib's DT_NEEDED chain), built on the standard
+ * pthread API that every bionic exports.                              */
+/* ------------------------------------------------------------------ */
+int _rwlock_init(pthread_rwlock_t *lock) { return pthread_rwlock_init(lock, NULL); }
+int _rwlock_destroy(pthread_rwlock_t *lock) { return pthread_rwlock_destroy(lock); }
+int _rwlock_rdlock(pthread_rwlock_t *lock) { return pthread_rwlock_rdlock(lock); }
+int _rwlock_wrlock(pthread_rwlock_t *lock) { return pthread_rwlock_wrlock(lock); }
+int _rwlock_tryrdlock(pthread_rwlock_t *lock) { return pthread_rwlock_tryrdlock(lock); }
+int _rwlock_trywrlock(pthread_rwlock_t *lock) { return pthread_rwlock_trywrlock(lock); }
+int _rwlock_unlock(pthread_rwlock_t *lock) { return pthread_rwlock_unlock(lock); }
+int _rwlock_timedrdlock(pthread_rwlock_t *lock, const struct timespec *t) { return pthread_rwlock_timedrdlock(lock, t); }
+int _rwlock_timedwrlock(pthread_rwlock_t *lock, const struct timespec *t) { return pthread_rwlock_timedwrlock(lock, t); }
 
 /* ------------------------------------------------------------------ */
 /* g_libintl_* : glib 2.76 detects libintl via pkg-config and forwards
