@@ -179,15 +179,10 @@ jobs:
 
       - name: Sign APK with debug keystore
         run: |
-          # Generate a debug keystore if not present
-          KEYSTORE="$HOME/.android/debug.keystore"
-          mkdir -p "$HOME/.android"
-          if [ ! -f "$KEYSTORE" ]; then
-            keytool -genkeypair -v -keystore "$KEYSTORE" \
-              -storepass android -alias androiddebugkey -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
+          # Use the FIXED keystore committed to the repo (tools/keys/debug.keystore).
+          # IMPORTANT: every build must produce the SAME signature, otherwise
+          # users cannot install updates over an existing install.
+          KEYSTORE="$GITHUB_WORKSPACE/tools/keys/debug.keystore"
           # Find the unsigned APK
           APK=$(find limbo-android-x86/build/outputs/apk/release -name "*-release-unsigned.apk" | head -1)
           if [ -z "$APK" ]; then
