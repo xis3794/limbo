@@ -54,8 +54,9 @@ jobs:
           # them against libc's standard-name version definitions)
           curl -sL -o /tmp/patchelf018.tgz \
             https://github.com/NixOS/patchelf/releases/download/0.18.0/patchelf-0.18.0-x86_64.tar.gz
-          tar xzf /tmp/patchelf018.tgz -C /tmp
-          sudo cp /tmp/bin/patchelf /usr/local/bin/
+          mkdir -p /tmp/p018
+          tar xzf /tmp/patchelf018.tgz -C /tmp/p018 --strip-components=1 --no-same-owner --no-overwrite-dir
+          sudo cp /tmp/p018/bin/patchelf /usr/local/bin/
           patchelf --version
 
       - name: Set up JDK 11 (for Gradle build)
