@@ -150,3 +150,24 @@ int close_range(unsigned int first, unsigned int last, int flags)
     errno = ENOSYS;
     return -1;
 }
+
+/* ------------------------------------------------------------------ */
+/* POSIX shared memory: bionic's shm support is limited and some       */
+/* Huawei/HarmonyOS libc do not export shm_open/shm_unlink at all.     */
+/* QEMU uses them for vhost-user / ivshmem; stub them (no-op failure). */
+/* ------------------------------------------------------------------ */
+int shm_open(const char *name, int oflag, mode_t mode)
+{
+    (void)name;
+    (void)oflag;
+    (void)mode;
+    errno = ENOSYS;
+    return -1;
+}
+
+int shm_unlink(const char *name)
+{
+    (void)name;
+    errno = ENOSYS;
+    return -1;
+}
