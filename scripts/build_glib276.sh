@@ -70,7 +70,7 @@ sed -i 's|^if have_func_kqueue and have_func_kevent$|if false # Limbo: no kqueue
 meson setup "$GLIB_BUILD" . --cross-file "$JNI/glib-cross.txt" \
   --default-library=shared -Dprefix=/usr \
   -Dc_args="-I$JNI/compat/musl/include -Wno-unknown-warning-option -Wno-error=implicit-function-declaration" \
-  -Dc_link_args="-L$OBJ -lcompat-musl -llog -Wl,-z,undefs -Wl,--no-rosegment" \
+  -Dc_link_args="-L$OBJ -lcompat-musl -llog -Wl,-z,undefs" \
   -Dlibmount=disabled -Dselinux=disabled -Ddtrace=false \
   -Dsystemtap=false -Dgtk_doc=false -Dman=false \
   -Dtests=false -Dinstalled_tests=false \
@@ -106,18 +106,24 @@ fi
 # a copy of libcompat-musl.so.
 echo "[OK] libintl.so provided by ndk-build compat/intl module"
 
-# Patch DT_NEEDED entries so Android finds the unversioned names
-if command -v patchelf >/dev/null 2>&1; then
-  patchelf --replace-needed libintl.so.8 libintl.so "$OBJ/libglib-2.0.so" 2>/dev/null || true
-  patchelf --replace-needed libpcre2-8.so.0 libpcre2-8.so "$OBJ/libglib-2.0.so" 2>/dev/null || true
-  echo "[OK] libglib DT_NEEDED patched"
-else
-  echo "[WARN] patchelf not available; DT_NEEDED not patched"
-fi
+# Patch DT_NEEDED entries IN PLACE (patchelf --replace-needed relocates
+# .dynstr to EOF which breaks Huawei linker's file-offset section reads;
+# fix_needed.py overwrites the strings without moving anything)
+python3 "$JNI/../../../../scripts/fix_needed.py" "$OBJ/libglib-2.0.so" \
+  libintl.so.8=libintl.so libpcre2-8.so.0=libpcre2-8.so || true
+python3 "$JNI/../../../../scripts/fix_needed.py" "$OBJ/libgmodule-2.0.so" \
+  libglib-2.0.so.0=libglib-2.0.so || true
+echo "[OK] libglib DT_NEEDED patched in place"
 
-# KEEP original ELF versioning: with --no-rosegment (sh_addr==sh_offset),
-# Huawei linker reads dynstr/verneed correctly and resolves versioned refs
-# against libc like it does for all 8.0.5 libs (which work).
-echo "[OK] glib libs keep original ELF versioning (classic layout)"
+# objcopy re-layout: Huawei linker reads section data by FILE offset while
+# .so is mapped by vaddr; lld layout (sh_addr != sh_offset) breaks it.
+# objcopy --strip-debug rewrites the file with sh_addr == sh_offset
+# (classic layout, same as the working 8.0.5 libs).
+for f in libglib-2.0.so libpcre2-8.so libgmodule-2.0.so libintl.so; do
+  if [ -f "$OBJ/$f" ]; then
+    objcopy --strip-debug "$OBJ/$f" 2>/dev/null || true
+    echo "[OK] $f: classic layout (sh_addr==sh_offset)"
+  fi
+done
 ls -la "$OBJ"/libglib* "$OBJ"/libgmodule* "$OBJ"/libpcre2* "$OBJ"/libintl* 2>/dev/null || true
 echo "[OK] glib2.76 built: $OBJ/libglib-2.0.so"

@@ -310,12 +310,16 @@ _build-qemu: ndk
 	@if [ -f qemu/build/qemu-system-$(GUEST_SHORT).so ]; then \
 		cp -f qemu/build/qemu-system-$(GUEST_SHORT).so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so; \
 		echo "[OK] QEMU8.x .so copied"; \
-		echo "[OK] DT_NEEDED glib -> unversioned name (file-name lookup compat)"; \
-		patchelf --replace-needed libglib-2.0.so.0 libglib-2.0.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so || true; \
+		echo "[OK] DT_NEEDED glib -> unversioned name (in-place, no dynstr move)"; \
+		python3 $(LIMBO_PRJ_ROOT)/scripts/fix_needed.py $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libqemu-system-$(GUEST_SHORT).so libglib-2.0.so.0=libglib-2.0.so || true; \
 		echo "[OK] DT_NEEDED gmodule -> unversioned glib name"; \
-		patchelf --replace-needed libglib-2.0.so.0 libglib-2.0.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libgmodule-2.0.so || true; \
+		python3 $(LIMBO_PRJ_ROOT)/scripts/fix_needed.py $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libgmodule-2.0.so libglib-2.0.so.0=libglib-2.0.so || true; \
 		echo "[OK] using prebuilt 8.0.5 libcompat-musl.so (Huawei linker cannot load any freshly-built musl: verneed[0] failure)"; \
 		cp -f $(LIMBO_PRJ_ROOT)/tools/prebuilt/libcompat-musl-805.so $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/libcompat-musl.so; \
+		echo "[OK] objcopy classic layout on all libs (sh_addr==sh_offset for Huawei linker)"; \
+		for so in $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/*.so; do \
+			objcopy --strip-debug "$$so" 2>/dev/null || true; \
+		done; \
 	fi
 	$(INSTALL_LIBS)
 	$(RENAME_TUNCTL)
