@@ -207,10 +207,15 @@ public class LimboApplication extends Application {
         } catch (Throwable ignored) {
         }
         try {
+            // Try both candidate crash paths (Huawei may not expose /data/data)
             File f = new File(getFilesDir(), "native_crash.txt");
-            if (f.exists() && f.length() > 0) {
+            File f2 = new File("/data/data/com.limbo.emu.main/files/native_crash.txt");
+            if ((f.exists() && f.length() > 0) || (f2.exists() && f2.length() > 0)) {
+                if (!f.exists() && f2.exists()) {
+                    f = f2;
+                }
                 java.io.FileInputStream fis = new java.io.FileInputStream(f);
-                byte[] buf = new byte[(int) Math.min(f.length(), 4096)];
+                byte[] buf = new byte[(int) Math.min(f.length(), 8192)];
                 int n = fis.read(buf);
                 fis.close();
                 if (n > 0) {
@@ -228,6 +233,7 @@ public class LimboApplication extends Application {
                     }
                 }
                 f.delete();
+                if (f2.exists()) f2.delete();
             }
         } catch (Exception ignored) {
         }

@@ -15,7 +15,20 @@
 #include <stdint.h>
 #include <unwind.h>
 
-#define CRASH_PATH "/data/data/com.limbo.emu.main/files/native_crash.txt"
+/* Huawei/HarmonyOS may not expose /data/data symlink; try several paths.
+ * The Java side (LimboApplication.installNativeDiag) reads the FIRST file
+ * from getFilesDir() and forwards it to Downloads as limbo_native.txt. */
+#define CRASH_PATH_1 "/data/user/0/com.limbo.emu.main/files/native_crash.txt"
+#define CRASH_PATH_2 "/data/data/com.limbo.emu.main/files/native_crash.txt"
+
+static int open_crash_file(void)
+{
+    int fd = open(CRASH_PATH_1, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd < 0) {
+        fd = open(CRASH_PATH_2, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    }
+    return fd;
+}
 
 static void write_num(int fd, unsigned long v)
 {
@@ -72,7 +85,7 @@ static _Unwind_Reason_Code trace_fn(struct _Unwind_Context *ctx, void *arg)
 static void crash_handler(int sig, siginfo_t *info, void *ctx)
 {
     (void)ctx;
-    int fd = open(CRASH_PATH, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    int fd = open_crash_file();
     if (fd >= 0) {
         write(fd, "\n===== NATIVE CRASH sig=", 24);
         write_num(fd, (unsigned long)sig);
