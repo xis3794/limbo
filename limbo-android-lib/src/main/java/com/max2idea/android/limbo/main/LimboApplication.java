@@ -204,18 +204,20 @@ public class LimboApplication extends Application {
     private void installNativeDiag() {
         try {
             System.loadLibrary("diag");
-        } catch (Throwable ignored) {
+            Log.e(TAG, "libdiag loaded OK (crash handler installed)");
+        } catch (Throwable t) {
+            Log.e(TAG, "libdiag load FAILED: " + t);
         }
         try {
-            // Try both candidate crash paths (Huawei may not expose /data/data)
+            // diag now writes directly to /sdcard/Download/limbo_native.txt;
+            // also check app-private candidates for older builds
             File f = new File(getFilesDir(), "native_crash.txt");
             File f2 = new File("/data/data/com.limbo.emu.main/files/native_crash.txt");
-            if ((f.exists() && f.length() > 0) || (f2.exists() && f2.length() > 0)) {
-                if (!f.exists() && f2.exists()) {
-                    f = f2;
-                }
-                java.io.FileInputStream fis = new java.io.FileInputStream(f);
-                byte[] buf = new byte[(int) Math.min(f.length(), 8192)];
+            File f3 = new File("/sdcard/Download/limbo_native.txt");
+            if ((f.exists() && f.length() > 0) || (f2.exists() && f2.length() > 0) || (f3.exists())) {
+                File src = f3.exists() ? f3 : (f.exists() ? f : f2);
+                java.io.FileInputStream fis = new java.io.FileInputStream(src);
+                byte[] buf = new byte[(int) Math.min(src.length(), 8192)];
                 int n = fis.read(buf);
                 fis.close();
                 if (n > 0) {

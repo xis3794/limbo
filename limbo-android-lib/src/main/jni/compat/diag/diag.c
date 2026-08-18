@@ -18,15 +18,25 @@
 
 /* Huawei/HarmonyOS may not expose /data/data symlink; try several paths.
  * The Java side (LimboApplication.installNativeDiag) reads the FIRST file
- * from getFilesDir() and forwards it to Downloads as limbo_native.txt. */
-#define CRASH_PATH_1 "/data/user/0/com.limbo.emu.main/files/native_crash.txt"
-#define CRASH_PATH_2 "/data/data/com.limbo.emu.main/files/native_crash.txt"
+ * from getFilesDir() and forwards it to Downloads as limbo_native.txt.
+ * We also write DIRECTLY to /sdcard/Download so the user can see the crash
+ * log without any forwarding step. */
+#define CRASH_PATH_1 "/sdcard/Download/limbo_native.txt"
+#define CRASH_PATH_2 "/storage/emulated/0/Download/limbo_native.txt"
+#define CRASH_PATH_3 "/data/user/0/com.limbo.emu.main/files/native_crash.txt"
+#define CRASH_PATH_4 "/data/data/com.limbo.emu.main/files/native_crash.txt"
 
 static int open_crash_file(void)
 {
     int fd = open(CRASH_PATH_1, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd < 0) {
         fd = open(CRASH_PATH_2, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    }
+    if (fd < 0) {
+        fd = open(CRASH_PATH_3, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    }
+    if (fd < 0) {
+        fd = open(CRASH_PATH_4, O_WRONLY | O_CREAT | O_APPEND, 0644);
     }
     return fd;
 }
@@ -142,4 +152,6 @@ __attribute__((constructor))
 static void diag_auto_install(void)
 {
     diag_install();
+    __android_log_print(ANDROID_LOG_INFO, "LimboDiag",
+                        "diag crash handler INSTALLED (sigaction registered)");
 }
