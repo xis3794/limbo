@@ -15,6 +15,30 @@
 #include <stdint.h>
 #include <unwind.h>
 #include <android/log.h>
+#include <link.h>
+#include <stdio.h>
+
+/* Library base addresses captured at load time (dl_iterate_phdr).
+ * Written into the crash log so host-side addr2line can resolve PCs. */
+struct libinfo {
+    uintptr_t base;
+    char name[64];
+};
+static struct libinfo g_libs[64];
+static int g_lib_count = 0;
+
+static int collect_libs(struct dl_phdr_info *info, size_t size, void *data)
+{
+    (void)size;
+    (void)data;
+    if (g_lib_count < 64 && info->dlpi_name && info->dlpi_name[0]) {
+        g_libs[g_lib_count].base = (uintptr_t)info->dlpi_addr;
+        snprintf(g_libs[g_lib_count].name, sizeof(g_libs[g_lib_count].name),
+                 "%s", info->dlpi_name);
+        g_lib_count++;
+    }
+    return 0;
+}
 
 /* Huawei/HarmonyOS may not expose /data/data symlink; try several paths.
  * The Java side (LimboApplication.installNativeDiag) reads the FIRST file
@@ -109,32 +133,35 @@ static _Unwind_Reason_Code trace_fn(struct _Unwind_Context *ctx, void *arg)
 static void crash_handler(int sig, siginfo_t *info, void *ctx)
 {
     (void)ctx;
-    /* ALWAYS log to logcat - Huawei logd works even if file writes fail */
-    __android_log_print(ANDROID_LOG_FATAL, "LimboDiag",
-                        "===== NATIVE CRASH sig=%d addr=%p =====", sig, info->si_addr);
+    /* Build the whole report into one buffer and write it with a SINGLE
+     * write() call - O_APPEND + single write = atomic, so concurrent
+     * crashes from multiple threads cannot interleave anymore. */
+    char buf[4096];
+    int off = 0;
+    off += snprintf(buf + off, sizeof(buf) - off,
+                    "\n===== NATIVE CRASH sig=%d addr=%p =====", sig, info->si_addr);
+    /* library base addresses (needed to resolve PCs to symbols) */
+    off += snprintf(buf + off, sizeof(buf) - off, "\n[libs]\n");
+    for (int i = 0; i < g_lib_count && off < (int)sizeof(buf) - 128; i++) {
+        off += snprintf(buf + off, sizeof(buf) - off, "  %s base=0x%lx\n",
+                        g_libs[i].name, (unsigned long)g_libs[i].base);
+    }
+    /* backtrace */
+    uintptr_t addrs[40];
+    struct trace_arg ta = { addrs, 0, 40 };
+    _Unwind_Backtrace(trace_fn, &ta);
+    off += snprintf(buf + off, sizeof(buf) - off, "[bt]\n");
+    for (int i = 0; i < ta.count && off < (int)sizeof(buf) - 128; i++) {
+        off += snprintf(buf + off, sizeof(buf) - off, "  #%d pc=0x%lx\n",
+                        i, (unsigned long)addrs[i]);
+    }
     int fd = open_crash_file();
     if (fd >= 0) {
-        write(fd, "\n===== NATIVE CRASH sig=", 24);
-        write_num(fd, (unsigned long)sig);
-        write(fd, " addr=", 6);
-        write_hex(fd, (uintptr_t)info->si_addr);
-        write(fd, " =====", 6);
-        write(fd, "\n", 1);
-        /* capture backtrace */
-        uintptr_t addrs[40];
-        struct trace_arg ta = { addrs, 0, 40 };
-        _Unwind_Backtrace(trace_fn, &ta);
-        for (int i = 0; i < ta.count; i++) {
-            write(fd, "  #", 3);
-            write_num(fd, (unsigned long)i);
-            write(fd, " pc=0x", 6);
-            write_hex(fd, addrs[i]);
-            write(fd, "\n", 1);
-            __android_log_print(ANDROID_LOG_FATAL, "LimboDiag", "  #%d pc=0x%lx", i,
-                                (unsigned long)addrs[i]);
-        }
+        (void)write(fd, buf, (size_t)off);
         close(fd);
     }
+    /* also mirror to logcat */
+    __android_log_print(ANDROID_LOG_FATAL, "LimboDiag", "%s", buf);
     /* restore default handler and re-raise so the system still
      * generates the normal tombstone */
     signal(sig, SIG_DFL);
@@ -164,6 +191,7 @@ void diag_install(void)
 __attribute__((constructor))
 static void diag_auto_install(void)
 {
+    dl_iterate_phdr(collect_libs, NULL);
     diag_install();
     __android_log_print(ANDROID_LOG_INFO, "LimboDiag",
                         "diag crash handler INSTALLED (sigaction registered)");
