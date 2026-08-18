@@ -14,6 +14,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <unwind.h>
+#include <android/log.h>
 
 /* Huawei/HarmonyOS may not expose /data/data symlink; try several paths.
  * The Java side (LimboApplication.installNativeDiag) reads the FIRST file
@@ -85,6 +86,9 @@ static _Unwind_Reason_Code trace_fn(struct _Unwind_Context *ctx, void *arg)
 static void crash_handler(int sig, siginfo_t *info, void *ctx)
 {
     (void)ctx;
+    /* ALWAYS log to logcat - Huawei logd works even if file writes fail */
+    __android_log_print(ANDROID_LOG_FATAL, "LimboDiag",
+                        "===== NATIVE CRASH sig=%d addr=%p =====", sig, info->si_addr);
     int fd = open_crash_file();
     if (fd >= 0) {
         write(fd, "\n===== NATIVE CRASH sig=", 24);
@@ -103,6 +107,8 @@ static void crash_handler(int sig, siginfo_t *info, void *ctx)
             write(fd, " pc=0x", 6);
             write_hex(fd, addrs[i]);
             write(fd, "\n", 1);
+            __android_log_print(ANDROID_LOG_FATAL, "LimboDiag", "  #%d pc=0x%lx", i,
+                                (unsigned long)addrs[i]);
         }
         close(fd);
     }
