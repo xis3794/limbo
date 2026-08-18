@@ -1222,20 +1222,9 @@ public class LimboActivity extends AppCompatActivity
 
     protected void logNative(String msg) {
         diagLog.append(msg).append("\n");
-        String content = diagLog.toString();
-        saveDiagnostic("limbo_load.txt", content, false);
-        // unique-name channel: some MediaStore implementations dedupe or
-        // drop same DISPLAY_NAME inserts; timestamped name guarantees every
-        // write lands in Downloads
-        saveDiagnostic("limbo_load_" + System.currentTimeMillis() + ".txt", content, false);
-        // dual-write via direct file (works if storage permission granted)
-        try {
-            java.io.FileOutputStream fos = new java.io.FileOutputStream(
-                    "/sdcard/Download/limbo_load2.txt");
-            fos.write(content.getBytes());
-            fos.close();
-        } catch (Exception ignored) {
-        }
+        // File logging DISABLED (was flooding Downloads with limbo_load_*.txt).
+        // Progress still visible in logcat under the LimboDiag tag.
+        Log.e("LimboDiag", msg);
     }
 
     public void setupNativeLibs() {
