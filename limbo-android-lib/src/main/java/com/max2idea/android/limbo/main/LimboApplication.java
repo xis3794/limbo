@@ -48,7 +48,6 @@ public class LimboApplication extends Application {
         // Progress visible in logcat under the LimboApplication tag only.
         Log.e(TAG, msg);
     }
-    }
 
     //Do not update these directly, see inherited project java files
     public static Config.Arch arch;
