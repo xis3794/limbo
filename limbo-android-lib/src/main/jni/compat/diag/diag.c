@@ -127,3 +127,13 @@ void diag_install(void)
     sigaction(SIGFPE, &sa, NULL);
     sigaction(SIGSYS, &sa, NULL);
 }
+
+/* Auto-install as soon as the library is dlopen'd (Java only calls
+ * System.loadLibrary("diag") - it never invokes diag_install() explicitly).
+ * Without this the crash handler was never registered and limbo_native.txt
+ * was never written. */
+__attribute__((constructor))
+static void diag_auto_install(void)
+{
+    diag_install();
+}
