@@ -12,6 +12,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <stdint.h>
+#include <unwind.h>
 
 #define CRASH_PATH "/data/data/com.limbo.emu.main/files/native_crash.txt"
 
@@ -32,16 +34,63 @@ static void write_num(int fd, unsigned long v)
     }
 }
 
+static void write_hex(int fd, uintptr_t v)
+{
+    static const char hex[] = "0123456789abcdef";
+    char buf[20];
+    int i = 0;
+    if (v == 0) {
+        write(fd, "0", 1);
+        return;
+    }
+    while (v > 0 && i < 18) {
+        buf[i++] = hex[v & 0xf];
+        v >>= 4;
+    }
+    while (i > 0) {
+        write(fd, &buf[--i], 1);
+    }
+}
+
+/* backtrace via unwind.h (works inside signal handlers on arm64) */
+struct trace_arg {
+    uintptr_t *addrs;
+    int count;
+    int max;
+};
+
+static _Unwind_Reason_Code trace_fn(struct _Unwind_Context *ctx, void *arg)
+{
+    struct trace_arg *ta = (struct trace_arg *)arg;
+    if (ta->count < ta->max) {
+        ta->addrs[ta->count++] = (uintptr_t)_Unwind_GetIP(ctx);
+        return _URC_NO_REASON;
+    }
+    return _URC_END_OF_STACK;
+}
+
 static void crash_handler(int sig, siginfo_t *info, void *ctx)
 {
     (void)ctx;
     int fd = open(CRASH_PATH, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd >= 0) {
-        write(fd, "NATIVE CRASH sig=", 17);
+        write(fd, "\n===== NATIVE CRASH sig=", 24);
         write_num(fd, (unsigned long)sig);
         write(fd, " addr=", 6);
-        write_num(fd, (unsigned long)info->si_addr);
+        write_hex(fd, (uintptr_t)info->si_addr);
+        write(fd, " =====", 6);
         write(fd, "\n", 1);
+        /* capture backtrace */
+        uintptr_t addrs[40];
+        struct trace_arg ta = { addrs, 0, 40 };
+        _Unwind_Backtrace(trace_fn, &ta);
+        for (int i = 0; i < ta.count; i++) {
+            write(fd, "  #", 3);
+            write_num(fd, (unsigned long)i);
+            write(fd, " pc=0x", 6);
+            write_hex(fd, addrs[i]);
+            write(fd, "\n", 1);
+        }
         close(fd);
     }
     /* restore default handler and re-raise so the system still
