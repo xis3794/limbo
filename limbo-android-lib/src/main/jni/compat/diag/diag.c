@@ -20,11 +20,15 @@
  * The Java side (LimboApplication.installNativeDiag) reads the FIRST file
  * from getFilesDir() and forwards it to Downloads as limbo_native.txt.
  * We also write DIRECTLY to /sdcard/Download so the user can see the crash
- * log without any forwarding step. */
+ * log without any forwarding step, AND to the app cache dir which the user
+ * can browse on-device (/Android/data/com.limbo.emu.main/cache/). */
 #define CRASH_PATH_1 "/sdcard/Download/limbo_native.txt"
 #define CRASH_PATH_2 "/storage/emulated/0/Download/limbo_native.txt"
 #define CRASH_PATH_3 "/data/user/0/com.limbo.emu.main/files/native_crash.txt"
 #define CRASH_PATH_4 "/data/data/com.limbo.emu.main/files/native_crash.txt"
+#define CRASH_PATH_5 "/data/user/0/com.limbo.emu.main/cache/native_crash.txt"
+#define CRASH_PATH_6 "/data/data/com.limbo.emu.main/cache/native_crash.txt"
+#define CRASH_PATH_7 "/data/cache/limbo/native_crash.txt"
 
 static int open_crash_file(void)
 {
@@ -37,6 +41,15 @@ static int open_crash_file(void)
     }
     if (fd < 0) {
         fd = open(CRASH_PATH_4, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    }
+    if (fd < 0) {
+        fd = open(CRASH_PATH_5, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    }
+    if (fd < 0) {
+        fd = open(CRASH_PATH_6, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    }
+    if (fd < 0) {
+        fd = open(CRASH_PATH_7, O_WRONLY | O_CREAT | O_APPEND, 0644);
     }
     return fd;
 }
