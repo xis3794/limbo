@@ -176,7 +176,7 @@ static void b_append_num(char *buf, int *off, int size, unsigned long v)
 static void crash_handler(int sig, siginfo_t *info, void *ctx)
 {
     (void)ctx;
-    char buf[4096];
+    char buf[16384];
     int off = 0;
     b_append(buf, &off, sizeof(buf), "\n===== NATIVE CRASH sig=");
     b_append_num(buf, &off, sizeof(buf), (unsigned long)sig);
@@ -184,22 +184,22 @@ static void crash_handler(int sig, siginfo_t *info, void *ctx)
     b_append_hex(buf, &off, sizeof(buf), (uintptr_t)info->si_addr);
     b_append(buf, &off, sizeof(buf), " =====\n");
 
-    /* Dump /proc/self/maps (pure open/read/write = async-signal-safe).
+    /* Dump /proc/self/maps COMPLETELY (loop until EOF or buffer full).
      * Host side parses it to get each lib's base address, then resolves
      * the PCs below with addr2line. */
     int mfd = open("/proc/self/maps", O_RDONLY);
     if (mfd >= 0) {
+        b_append(buf, &off, sizeof(buf), "[maps]\n");
         char mbuf[2048];
-        ssize_t n = read(mfd, mbuf, sizeof(mbuf) - 1);
-        close(mfd);
-        if (n > 0) {
-            mbuf[n] = '\0';
-            b_append(buf, &off, sizeof(buf), "[maps]\n");
-            for (ssize_t i = 0; i < n && off < (int)sizeof(buf) - 300; i++) {
+        ssize_t n;
+        while (off < (int)sizeof(buf) - 1024 &&
+               (n = read(mfd, mbuf, sizeof(mbuf))) > 0) {
+            for (ssize_t i = 0; i < n && off < (int)sizeof(buf) - 1024; i++) {
                 buf[off++] = mbuf[i];
             }
-            b_append(buf, &off, sizeof(buf), "\n");
         }
+        close(mfd);
+        b_append(buf, &off, sizeof(buf), "\n");
     }
 
     b_append(buf, &off, sizeof(buf), "[bt]\n");
