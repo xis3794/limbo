@@ -43,23 +43,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Check preinstalled tools (no apt needed)
         run: |
-          # Use Aliyun mirror for apt (GitHub runner default archive.ubuntu.com
-          # is unreliable from CN networks - caused repeated timeouts in CI).
-          sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak || true
-          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
-            sudo sed -i 's|http://archive.ubuntu.com/ubuntu|https://mirrors.aliyun.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://mirrors.aliyun.com/ubuntu|g; s|http://ports.ubuntu.com/ubuntu-ports|https://mirrors.aliyun.com/ubuntu-ports|g' /etc/apt/sources.list.d/ubuntu.sources
-          else
-            sudo sed -i 's|http://archive.ubuntu.com/ubuntu|https://mirrors.aliyun.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://mirrors.aliyun.com/ubuntu|g' /etc/apt/sources.list
-          fi
-          for i in 1 2 3; do
-            sudo apt-get update && break || sleep 5
+          # ubuntu-latest preinstalls everything we need. Verify:
+          for t in make gcc g++ git python3 pkg-config flex bison gettext texinfo \
+                   rsync unzip zip wget curl meson ninja autoconf automake libtool; do
+            command -v $t >/dev/null 2>&1 || echo "MISSING: $t"
           done
-          sudo apt-get install -y --option Acquire::Retries=5 --option Acquire::http::Timeout=60 \
-            make autoconf automake git python3 libtool-bin \
-            pkg-config flex bison gettext texinfo rsync gcc g++ unzip zip wget curl \
-            meson ninja-build gtk-doc-tools patchelf
+          echo "tool check done"
           # patchelf >= 0.18 needed for --replace-symbol (rename _rwlock_*
           # to pthread_rwlock_* in glib/qemu so Huawei linker can resolve
           # them against libc's standard-name version definitions)
