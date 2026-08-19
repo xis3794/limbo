@@ -45,14 +45,25 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y make autoconf automake git python3 libtool-bin \
+          # Use Aliyun mirror for apt (GitHub runner default archive.ubuntu.com
+          # is unreliable from CN networks - caused repeated timeouts in CI).
+          sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak || true
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sudo sed -i 's|http://archive.ubuntu.com/ubuntu|https://mirrors.aliyun.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://mirrors.aliyun.com/ubuntu|g; s|http://ports.ubuntu.com/ubuntu-ports|https://mirrors.aliyun.com/ubuntu-ports|g' /etc/apt/sources.list.d/ubuntu.sources
+          else
+            sudo sed -i 's|http://archive.ubuntu.com/ubuntu|https://mirrors.aliyun.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://mirrors.aliyun.com/ubuntu|g' /etc/apt/sources.list
+          fi
+          for i in 1 2 3; do
+            sudo apt-get update && break || sleep 5
+          done
+          sudo apt-get install -y --option Acquire::Retries=5 --option Acquire::http::Timeout=60 \
+            make autoconf automake git python3 libtool-bin \
             pkg-config flex bison gettext texinfo rsync gcc g++ unzip zip wget curl \
             meson ninja-build gtk-doc-tools patchelf
           # patchelf >= 0.18 needed for --replace-symbol (rename _rwlock_*
           # to pthread_rwlock_* in glib/qemu so Huawei linker can resolve
           # them against libc's standard-name version definitions)
-          curl -sL -o /tmp/patchelf018.tgz \
+          curl -sL --retry 5 --retry-delay 3 -o /tmp/patchelf018.tgz \
             https://github.com/NixOS/patchelf/releases/download/0.18.0/patchelf-0.18.0-x86_64.tar.gz
           mkdir -p /tmp/p018
           tar xzf /tmp/patchelf018.tgz -C /tmp/p018 --strip-components=1 --no-same-owner --no-overwrite-dir
@@ -78,7 +89,7 @@ jobs:
           JAVA_HOME: ${{ steps.jdk17.outputs.path }}
         run: |
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          wget -q --timeout=60 --tries=5 --retry-connrefused --waitretry=5 https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q commandlinetools-linux-11076708_latest.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
           mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
@@ -87,7 +98,7 @@ jobs:
 
       - name: Set up NDK r23b
         run: |
-          wget -q https://dl.google.com/android/repository/android-ndk-r23b-linux.zip
+          wget -q --timeout=60 --tries=5 --retry-connrefused --waitretry=5 https://dl.google.com/android/repository/android-ndk-r23b-linux.zip
           unzip -q android-ndk-r23b-linux.zip
           echo "NDK_ROOT=$GITHUB_WORKSPACE/android-ndk-r23b" >> $GITHUB_ENV
 
@@ -95,16 +106,16 @@ jobs:
         run: |
           cd limbo-android-lib/src/main/jni
           # QEMU
-          wget -q https://download.qemu.org/qemu-$QEMU_VER.tar.xz
+          wget -q --timeout=60 --tries=5 --retry-connrefused --waitretry=5 https://download.qemu.org/qemu-$QEMU_VER.tar.xz
           tar xf qemu-$QEMU_VER.tar.xz && mv qemu-$QEMU_VER qemu && rm qemu-$QEMU_VER.tar.xz
           # glib 2.56.1
-          wget -q https://download.gnome.org/sources/glib/2.56/glib-2.56.1.tar.xz
+          wget -q --timeout=60 --tries=5 --retry-connrefused --waitretry=5 https://download.gnome.org/sources/glib/2.56/glib-2.56.1.tar.xz
           tar xf glib-2.56.1.tar.xz && mv glib-2.56.1 glib && rm glib-2.56.1.tar.xz
           # libffi 3.3
-          wget -q https://github.com/libffi/libffi/releases/download/v3.3/libffi-3.3.tar.gz
+          wget -q --timeout=60 --tries=5 --retry-connrefused --waitretry=5 https://github.com/libffi/libffi/releases/download/v3.3/libffi-3.3.tar.gz
           tar xzf libffi-3.3.tar.gz && mv libffi-3.3 libffi && rm libffi-3.3.tar.gz
           # pixman 0.40.0
-          wget -q https://www.cairographics.org/releases/pixman-0.40.0.tar.gz
+          wget -q --timeout=60 --tries=5 --retry-connrefused --waitretry=5 https://www.cairographics.org/releases/pixman-0.40.0.tar.gz
           tar xzf pixman-0.40.0.tar.gz && mv pixman-0.40.0 pixman && rm pixman-0.40.0.tar.gz
           # SDL2 2.0.8
           wget -q https://www.libsdl.org/release/SDL2-2.0.8.tar.gz
