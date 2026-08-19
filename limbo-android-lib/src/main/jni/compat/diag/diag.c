@@ -173,6 +173,58 @@ static void b_append_num(char *buf, int *off, int size, unsigned long v)
     }
 }
 
+/* Copy only .so mapping lines from /proc/self/maps into out.
+ * Simple robust approach: read entire maps (loop until EOF), then
+ * copy whole lines that contain ".so". All ops are async-signal-safe
+ * (open/read/write + manual char scanning, no libc formatting). */
+static int contains_so(const char *s, int len)
+{
+    for (int i = 0; i + 3 <= len; i++) {
+        if (s[i] == '.' && s[i+1] == 's' && s[i+2] == 'o' &&
+            (s[i+3] == ' ' || s[i+3] == '\n' || s[i+3] == '\0')) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void dump_so_maps(char *buf, int *off, int size)
+{
+    /* read entire /proc/self/maps into a static scratch area */
+    static char scratch[16384];
+    int total = 0;
+    int mfd = open("/proc/self/maps", O_RDONLY);
+    if (mfd < 0) {
+        return;
+    }
+    ssize_t n;
+    while (total < (int)sizeof(scratch) - 1 &&
+           (n = read(mfd, scratch + total, sizeof(scratch) - 1 - (size_t)total)) > 0) {
+        total += (int)n;
+    }
+    close(mfd);
+    scratch[total] = '\0';
+
+    /* copy only lines containing ".so" */
+    int i = 0;
+    while (i < total && *off < size - 200) {
+        int start = i;
+        while (i < total && scratch[i] != '\n') {
+            i++;
+        }
+        int len = i - start;
+        if (contains_so(scratch + start, len) && *off < size - len - 2) {
+            for (int j = 0; j < len && *off < size - 2; j++) {
+                buf[(*off)++] = scratch[start + j];
+            }
+            buf[(*off)++] = '\n';
+        }
+        if (i < total && scratch[i] == '\n') {
+            i++;
+        }
+    }
+}
+
 static void crash_handler(int sig, siginfo_t *info, void *ctx)
 {
     (void)ctx;
@@ -182,27 +234,10 @@ static void crash_handler(int sig, siginfo_t *info, void *ctx)
     b_append_num(buf, &off, sizeof(buf), (unsigned long)sig);
     b_append(buf, &off, sizeof(buf), " addr=0x");
     b_append_hex(buf, &off, sizeof(buf), (uintptr_t)info->si_addr);
-    b_append(buf, &off, sizeof(buf), " =====\n");
+    b_append(buf, &off, sizeof(buf), " =====\n[so-libs]\n");
+    dump_so_maps(buf, &off, sizeof(buf));
 
-    /* Dump /proc/self/maps COMPLETELY (loop until EOF or buffer full).
-     * Host side parses it to get each lib's base address, then resolves
-     * the PCs below with addr2line. */
-    int mfd = open("/proc/self/maps", O_RDONLY);
-    if (mfd >= 0) {
-        b_append(buf, &off, sizeof(buf), "[maps]\n");
-        char mbuf[2048];
-        ssize_t n;
-        while (off < (int)sizeof(buf) - 1024 &&
-               (n = read(mfd, mbuf, sizeof(mbuf))) > 0) {
-            for (ssize_t i = 0; i < n && off < (int)sizeof(buf) - 1024; i++) {
-                buf[off++] = mbuf[i];
-            }
-        }
-        close(mfd);
-        b_append(buf, &off, sizeof(buf), "\n");
-    }
-
-    b_append(buf, &off, sizeof(buf), "[bt]\n");
+    b_append(buf, &off, sizeof(buf), "\n[bt]\n");
     uintptr_t addrs[40];
     struct trace_arg ta = { addrs, 0, 40 };
     _Unwind_Backtrace(trace_fn, &ta);
