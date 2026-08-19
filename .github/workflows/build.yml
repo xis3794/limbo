@@ -45,11 +45,17 @@ jobs:
 
       - name: Check preinstalled tools (no apt needed)
         run: |
-          # ubuntu-latest preinstalls everything we need. Verify:
+          # ubuntu-latest preinstalls most tools; verify and install the
+          # missing ones (meson/ninja) via pip (runner network is fine).
           for t in make gcc g++ git python3 pkg-config flex bison gettext texinfo \
-                   rsync unzip zip wget curl meson ninja autoconf automake libtool; do
+                   rsync unzip zip wget curl autoconf automake libtool; do
             command -v $t >/dev/null 2>&1 || echo "MISSING: $t"
           done
+          command -v meson || pip3 install --quiet --retries 5 meson ninja
+          command -v ninja || pip3 install --quiet --retries 5 ninja
+          command -v meson || { for i in 1 2 3; do pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple meson ninja && break || sleep 5; done; }
+          meson --version || true
+          ninja --version || true
           echo "tool check done"
           # patchelf >= 0.18 needed for --replace-symbol (rename _rwlock_*
           # to pthread_rwlock_* in glib/qemu so Huawei linker can resolve
