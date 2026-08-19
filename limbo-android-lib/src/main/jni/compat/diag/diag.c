@@ -33,8 +33,10 @@ static int collect_libs(struct dl_phdr_info *info, size_t size, void *data)
     (void)data;
     if (g_lib_count < 64 && info->dlpi_name && info->dlpi_name[0]) {
         g_libs[g_lib_count].base = (uintptr_t)info->dlpi_addr;
-        snprintf(g_libs[g_lib_count].name, sizeof(g_libs[g_lib_count].name),
-                 "%s", info->dlpi_name);
+        size_t n = strlen(info->dlpi_name);
+        if (n > 63) n = 63;
+        memcpy(g_libs[g_lib_count].name, info->dlpi_name, n);
+        g_libs[g_lib_count].name[n] = '\0';
         g_lib_count++;
     }
     return 0;
@@ -130,38 +132,93 @@ static _Unwind_Reason_Code trace_fn(struct _Unwind_Context *ctx, void *arg)
     return _URC_END_OF_STACK;
 }
 
+/* async-signal-safe buffer builders (NO snprintf/__android_log in handler) */
+static void b_append(char *buf, int *off, int size, const char *s)
+{
+    while (*s && *off < size - 1) {
+        buf[(*off)++] = *s++;
+    }
+}
+
+static void b_append_hex(char *buf, int *off, int size, uintptr_t v)
+{
+    static const char hex[] = "0123456789abcdef";
+    char tmp[20];
+    int i = 0;
+    if (v == 0) {
+        tmp[i++] = '0';
+    }
+    while (v > 0 && i < 18) {
+        tmp[i++] = hex[v & 0xf];
+        v >>= 4;
+    }
+    while (i > 0 && *off < size - 1) {
+        buf[(*off)++] = tmp[--i];
+    }
+}
+
+static void b_append_num(char *buf, int *off, int size, unsigned long v)
+{
+    char tmp[24];
+    int i = 0;
+    if (v == 0) {
+        tmp[i++] = '0';
+    }
+    while (v > 0 && i < 23) {
+        tmp[i++] = (char)('0' + (v % 10));
+        v /= 10;
+    }
+    while (i > 0 && *off < size - 1) {
+        buf[(*off)++] = tmp[--i];
+    }
+}
+
 static void crash_handler(int sig, siginfo_t *info, void *ctx)
 {
     (void)ctx;
-    /* Build the whole report into one buffer and write it with a SINGLE
-     * write() call - O_APPEND + single write = atomic, so concurrent
-     * crashes from multiple threads cannot interleave anymore. */
     char buf[4096];
     int off = 0;
-    off += snprintf(buf + off, sizeof(buf) - off,
-                    "\n===== NATIVE CRASH sig=%d addr=%p =====", sig, info->si_addr);
-    /* library base addresses (needed to resolve PCs to symbols) */
-    off += snprintf(buf + off, sizeof(buf) - off, "\n[libs]\n");
-    for (int i = 0; i < g_lib_count && off < (int)sizeof(buf) - 128; i++) {
-        off += snprintf(buf + off, sizeof(buf) - off, "  %s base=0x%lx\n",
-                        g_libs[i].name, (unsigned long)g_libs[i].base);
+    b_append(buf, &off, sizeof(buf), "\n===== NATIVE CRASH sig=");
+    b_append_num(buf, &off, sizeof(buf), (unsigned long)sig);
+    b_append(buf, &off, sizeof(buf), " addr=0x");
+    b_append_hex(buf, &off, sizeof(buf), (uintptr_t)info->si_addr);
+    b_append(buf, &off, sizeof(buf), " =====\n");
+
+    /* Dump /proc/self/maps (pure open/read/write = async-signal-safe).
+     * Host side parses it to get each lib's base address, then resolves
+     * the PCs below with addr2line. */
+    int mfd = open("/proc/self/maps", O_RDONLY);
+    if (mfd >= 0) {
+        char mbuf[2048];
+        ssize_t n = read(mfd, mbuf, sizeof(mbuf) - 1);
+        close(mfd);
+        if (n > 0) {
+            mbuf[n] = '\0';
+            b_append(buf, &off, sizeof(buf), "[maps]\n");
+            for (ssize_t i = 0; i < n && off < (int)sizeof(buf) - 300; i++) {
+                buf[off++] = mbuf[i];
+            }
+            b_append(buf, &off, sizeof(buf), "\n");
+        }
     }
-    /* backtrace */
+
+    b_append(buf, &off, sizeof(buf), "[bt]\n");
     uintptr_t addrs[40];
     struct trace_arg ta = { addrs, 0, 40 };
     _Unwind_Backtrace(trace_fn, &ta);
-    off += snprintf(buf + off, sizeof(buf) - off, "[bt]\n");
     for (int i = 0; i < ta.count && off < (int)sizeof(buf) - 128; i++) {
-        off += snprintf(buf + off, sizeof(buf) - off, "  #%d pc=0x%lx\n",
-                        i, (unsigned long)addrs[i]);
+        b_append(buf, &off, sizeof(buf), "  #");
+        b_append_num(buf, &off, sizeof(buf), (unsigned long)i);
+        b_append(buf, &off, sizeof(buf), " pc=0x");
+        b_append_hex(buf, &off, sizeof(buf), addrs[i]);
+        b_append(buf, &off, sizeof(buf), "\n");
     }
+    /* single atomic write */
     int fd = open_crash_file();
     if (fd >= 0) {
         (void)write(fd, buf, (size_t)off);
         close(fd);
     }
-    /* also mirror to logcat */
-    __android_log_print(ANDROID_LOG_FATAL, "LimboDiag", "%s", buf);
     /* restore default handler and re-raise so the system still
      * generates the normal tombstone */
     signal(sig, SIG_DFL);
