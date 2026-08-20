@@ -168,7 +168,11 @@ jobs:
           fi
           echo "=== DIAG CHECK BEFORE ==="
           grep -c 'so-libs' compat/diag/diag.c || true
+          md5sum compat/diag/diag.c || true
           make limbo
+          echo "=== DIAG CHECK AFTER SOURCE ==="
+          grep -c 'so-libs' compat/diag/diag.c || true
+          md5sum compat/diag/diag.c || true
           echo "=== DIAG CHECK AFTER (obj/local) ==="
           ls -la "$PWD/../obj/local/arm64-v8a/libdiag.so" 2>/dev/null || true
           grep -c 'so-libs' "$PWD/../obj/local/arm64-v8a/libdiag.so" 2>/dev/null || true
@@ -176,6 +180,9 @@ jobs:
           echo "=== DIAG CHECK AFTER (libs) ==="
           grep -c 'so-libs' "$PWD/../libs/arm64-v8a/libdiag.so" 2>/dev/null || true
           md5sum "$PWD/../libs/arm64-v8a/libdiag.so" 2>/dev/null || true
+          echo "=== DIAG CHECK ndk-build history ==="
+          find "$PWD/../obj/local" -name '*.o' -path '*diag*' 2>/dev/null | head -5
+          ls -la "$PWD/../obj/local/arm64-v8a/objs/diag/" 2>/dev/null | head -10
 
       - name: Install extra EFI firmware (OVMF / VMWARE_EFI)
         run: |
