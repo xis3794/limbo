@@ -173,29 +173,21 @@ static void b_append_num(char *buf, int *off, int size, unsigned long v)
     }
 }
 
-/* Copy only app .so mapping lines from /proc/self/maps into out.
- * STREAMING: reads chunk by chunk, extracts whole lines containing
- * "/data/app/" AND ".so" (app libs only - skips the huge list of system
- * libs that would fill the buffer before the backtrace is written).
- * No static scratch buffer - multiple threads can crash simultaneously
- * (they each have their own stack), so static state would race.
- * All ops are async-signal-safe (open/read/write + manual char scanning). */
-static int line_is_app_so(const char *s, int len)
+/* Copy .so mapping lines from /proc/self/maps into out.
+ * Include ALL .so (app + system) - the crash PCs point into libc/system
+ * region (0x79xx), so we need those bases too. Backtrace is written
+ * BEFORE maps, so maps truncation can never lose the stack.
+ * STREAMING, no static state (thread-safe for concurrent crashes).
+ * All ops are async-signal-safe. */
+static int line_is_so(const char *s, int len)
 {
-    int has_so = 0;
-    int has_app = 0;
     for (int i = 0; i + 3 <= len; i++) {
         if (s[i] == '.' && s[i+1] == 's' && s[i+2] == 'o' &&
             (s[i+3] == ' ' || s[i+3] == '\n' || s[i+3] == '\0')) {
-            has_so = 1;
-        }
-        if (s[i] == '/' && s[i+1] == 'd' && s[i+2] == 'a' && s[i+3] == 't' &&
-            s[i+4] == 'a' && s[i+5] == '/' && s[i+6] == 'a' && s[i+7] == 'p' &&
-            s[i+8] == 'p' && s[i+9] == '/') {
-            has_app = 1;
+            return 1;
         }
     }
-    return has_so && has_app;
+    return 0;
 }
 
 static void dump_so_maps(char *buf, int *off, int size)
@@ -212,7 +204,7 @@ static void dump_so_maps(char *buf, int *off, int size)
         for (ssize_t i = 0; i < n; i++) {
             if (chunk[i] == '\n' || li >= 510) {
                 line[li] = '\0';
-                if (line_is_app_so(line, li) && *off < size - 540) {
+                if (line_is_so(line, li) && *off < size - 540) {
                     for (int j = 0; j < li && *off < size - 2; j++) {
                         buf[(*off)++] = line[j];
                     }
