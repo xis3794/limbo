@@ -191,6 +191,17 @@ jobs:
           echo "=== DIAG CHECK ndk-build history ==="
           find "$PWD/../obj/local" -name '*.o' -path '*diag*' 2>/dev/null | head -5
           ls -la "$PWD/../obj/local/arm64-v8a/objs/diag/" 2>/dev/null | head -10
+          echo "=== DIAG.o so-libs check (compile source verification) ==="
+          grep -c 'so-libs' "$PWD/../obj/local/arm64-v8a/objs/diag/diag.o" 2>/dev/null || true
+          echo "=== diag.o strings ==="
+          strings -a "$PWD/../obj/local/arm64-v8a/objs/diag/diag.o" 2>/dev/null | grep -E 'so-libs|NATIVE CRASH|proc/self/maps' | head -5
+          echo "=== diag.c in git tree ==="
+          git -C "$GITHUB_WORKSPACE" log --oneline -1 2>/dev/null || true
+          md5sum "$PWD/compat/diag/diag.c" 2>/dev/null || true
+          echo "=== Android.mk diag module ==="
+          cat "$PWD/compat/diag/Android.mk" 2>/dev/null || true
+          echo "=== check ALL diag.c files ==="
+          find "$PWD" -name 'diag.c' 2>/dev/null | head -5
 
       - name: Install extra EFI firmware (OVMF / VMWARE_EFI)
         run: |
