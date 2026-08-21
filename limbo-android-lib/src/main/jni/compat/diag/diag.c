@@ -174,9 +174,10 @@ static void b_append_num(char *buf, int *off, int size, unsigned long v)
 }
 
 /* Copy only .so mapping lines from /proc/self/maps into out.
- * Simple robust approach: read entire maps (loop until EOF), then
- * copy whole lines that contain ".so". All ops are async-signal-safe
- * (open/read/write + manual char scanning, no libc formatting). */
+ * STREAMING: reads chunk by chunk, extracts whole lines containing ".so".
+ * No static scratch buffer - multiple threads can crash simultaneously
+ * (they each have their own stack), so static state would race.
+ * All ops are async-signal-safe (open/read/write + manual char scanning). */
 static int contains_so(const char *s, int len)
 {
     for (int i = 0; i + 3 <= len; i++) {
@@ -190,39 +191,31 @@ static int contains_so(const char *s, int len)
 
 static void dump_so_maps(char *buf, int *off, int size)
 {
-    /* read entire /proc/self/maps into a static scratch area */
-    static char scratch[16384];
-    int total = 0;
     int mfd = open("/proc/self/maps", O_RDONLY);
     if (mfd < 0) {
         return;
     }
+    char line[300];
+    int li = 0;
+    char chunk[512];
     ssize_t n;
-    while (total < (int)sizeof(scratch) - 1 &&
-           (n = read(mfd, scratch + total, sizeof(scratch) - 1 - (size_t)total)) > 0) {
-        total += (int)n;
+    while ((n = read(mfd, chunk, sizeof(chunk))) > 0) {
+        for (ssize_t i = 0; i < n; i++) {
+            if (chunk[i] == '\n' || li >= 298) {
+                line[li] = '\0';
+                if (contains_so(line, li) && *off < size - 320) {
+                    for (int j = 0; j < li && *off < size - 2; j++) {
+                        buf[(*off)++] = line[j];
+                    }
+                    buf[(*off)++] = '\n';
+                }
+                li = 0;
+            } else {
+                line[li++] = chunk[i];
+            }
+        }
     }
     close(mfd);
-    scratch[total] = '\0';
-
-    /* copy only lines containing ".so" */
-    int i = 0;
-    while (i < total && *off < size - 200) {
-        int start = i;
-        while (i < total && scratch[i] != '\n') {
-            i++;
-        }
-        int len = i - start;
-        if (contains_so(scratch + start, len) && *off < size - len - 2) {
-            for (int j = 0; j < len && *off < size - 2; j++) {
-                buf[(*off)++] = scratch[start + j];
-            }
-            buf[(*off)++] = '\n';
-        }
-        if (i < total && scratch[i] == '\n') {
-            i++;
-        }
-    }
 }
 
 static void crash_handler(int sig, siginfo_t *info, void *ctx)
