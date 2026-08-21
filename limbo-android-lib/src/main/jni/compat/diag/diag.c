@@ -173,21 +173,27 @@ static void b_append_num(char *buf, int *off, int size, unsigned long v)
     }
 }
 
-/* Copy .so mapping lines from /proc/self/maps into out.
- * Include ALL .so (app + system) - the crash PCs point into libc/system
- * region (0x79xx), so we need those bases too. Backtrace is written
- * BEFORE maps, so maps truncation can never lose the stack.
+/* Copy .so CODE segment (r-xp) mapping lines from /proc/self/maps.
+ * Only the executable segment is needed for pc-base symbol resolution,
+ * and it drastically reduces output so ALL libs (incl. system libc)
+ * fit in the buffer. Backtrace is written BEFORE maps, so truncation
+ * can never lose the stack.
  * STREAMING, no static state (thread-safe for concurrent crashes).
  * All ops are async-signal-safe. */
-static int line_is_so(const char *s, int len)
+static int line_is_so_code(const char *s, int len)
 {
+    int has_so = 0;
+    int has_rxp = 0;
     for (int i = 0; i + 3 <= len; i++) {
         if (s[i] == '.' && s[i+1] == 's' && s[i+2] == 'o' &&
             (s[i+3] == ' ' || s[i+3] == '\n' || s[i+3] == '\0')) {
-            return 1;
+            has_so = 1;
+        }
+        if (s[i] == 'r' && s[i+1] == '-' && s[i+2] == 'x' && s[i+3] == 'p') {
+            has_rxp = 1;
         }
     }
-    return 0;
+    return has_so && has_rxp;
 }
 
 static void dump_so_maps(char *buf, int *off, int size)
@@ -204,7 +210,7 @@ static void dump_so_maps(char *buf, int *off, int size)
         for (ssize_t i = 0; i < n; i++) {
             if (chunk[i] == '\n' || li >= 510) {
                 line[li] = '\0';
-                if (line_is_so(line, li) && *off < size - 540) {
+                if (line_is_so_code(line, li) && *off < size - 540) {
                     for (int j = 0; j < li && *off < size - 2; j++) {
                         buf[(*off)++] = line[j];
                     }
