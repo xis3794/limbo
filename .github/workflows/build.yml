@@ -174,6 +174,9 @@ jobs:
           # never got the new so-libs code)
           echo "=== FORCE CLEAN obj/local (ndk-build full rebuild) ==="
           rm -rf "$PWD/../obj/local"
+          # V=1 makes ndk-build print the FULL compiler command lines so we
+          # can see exactly which diag.c is being compiled
+          export NDK_BUILD_FLAGS="V=1"
           make limbo
           echo "=== DIAG CHECK AFTER SOURCE ==="
           grep -c 'so-libs' compat/diag/diag.c || true
