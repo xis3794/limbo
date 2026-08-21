@@ -169,6 +169,11 @@ jobs:
           echo "=== DIAG CHECK BEFORE ==="
           grep -c 'so-libs' compat/diag/diag.c || true
           md5sum compat/diag/diag.c || true
+          # FORCE clean rebuild of ALL ndk modules (multiple ndk-build runs
+          # inside make limbo were reusing stale .o files, so libdiag.so
+          # never got the new so-libs code)
+          echo "=== FORCE CLEAN obj/local (ndk-build full rebuild) ==="
+          rm -rf "$PWD/../obj/local"
           make limbo
           echo "=== DIAG CHECK AFTER SOURCE ==="
           grep -c 'so-libs' compat/diag/diag.c || true
@@ -177,6 +182,9 @@ jobs:
           ls -la "$PWD/../obj/local/arm64-v8a/libdiag.so" 2>/dev/null || true
           grep -c 'so-libs' "$PWD/../obj/local/arm64-v8a/libdiag.so" 2>/dev/null || true
           md5sum "$PWD/../obj/local/arm64-v8a/libdiag.so" 2>/dev/null || true
+          echo "=== FORCE copy new libdiag.so to libs/ + jniLibs/ ==="
+          cp -f "$PWD/../obj/local/arm64-v8a/libdiag.so" "$PWD/../libs/arm64-v8a/libdiag.so" 2>/dev/null || true
+          cp -f "$PWD/../obj/local/arm64-v8a/libdiag.so" "$PWD/../jniLibs/arm64-v8a/libdiag.so" 2>/dev/null || true
           echo "=== DIAG CHECK AFTER (libs) ==="
           grep -c 'so-libs' "$PWD/../libs/arm64-v8a/libdiag.so" 2>/dev/null || true
           md5sum "$PWD/../libs/arm64-v8a/libdiag.so" 2>/dev/null || true
