@@ -225,36 +225,12 @@ static void dump_so_maps(char *buf, int *off, int size)
     close(mfd);
 }
 
-/* Dump the crash buffer to logcat. logd messages are capped (~4KB), so
- * split on newlines into chunks. __android_log_write is safe in a signal
- * handler (it's just a writev to the logd socket, no locks held).
- * This is the PRIMARY channel now (user has adb and reads logcat). */
-static void logcat_dump(const char *buf, int len)
-{
-    const int chunk_max = 3000;
-    int start = 0;
-    while (start < len) {
-        int end = start + chunk_max;
-        if (end > len) end = len;
-        /* break at last newline inside the chunk for readability */
-        if (end < len) {
-            int j;
-            int found = -1;
-            for (j = start; j < end; j++) {
-                if (buf[j] == '\n') found = j;
-            }
-            if (found > start) end = found + 1;
-        }
-        char tmp[chunk_max + 8];
-        int n = end - start;
-        if (n > chunk_max) n = chunk_max;
-        memcpy(tmp, buf + start, (size_t)n);
-        tmp[n] = '\0';
-        __android_log_write(ANDROID_LOG_FATAL, "LimboDiag", tmp);
-        start = end;
-    }
-}
-
+/* NOTE: __android_log_write is NOT async-signal-safe. Calling it from a
+ * signal handler (especially when the crash is a corrupted-mutex FORTIFY
+ * abort) can deadlock on the logd socket and prevent BOTH the file write
+ * and the re-raise. So the handler stays 100% file-based (write() only).
+ * The Java side dumps /proc/self/maps to logcat in a normal thread before
+ * starting the VM, giving us the library bases without touching logd here. */
 static void crash_handler(int sig, siginfo_t *info, void *ctx)
 {
     (void)ctx;
@@ -282,9 +258,6 @@ static void crash_handler(int sig, siginfo_t *info, void *ctx)
     /* app .so base addresses (for pc - base symbol resolution) */
     b_append(buf, &off, sizeof(buf), "[so-libs]\n");
     dump_so_maps(buf, &off, sizeof(buf));
-
-    /* logcat FIRST (primary channel - reliable, no filesystem dependency) */
-    logcat_dump(buf, off);
 
     /* single atomic write (secondary channel) */
     int fd = open_crash_file();
