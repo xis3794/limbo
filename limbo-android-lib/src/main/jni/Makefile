@@ -8,7 +8,8 @@ else
 	NDK_BUILD = ndk-build
 endif
 
-ndkbuild=cd $(NDK_PROJECT_PATH) && $(NDK_BUILD) -j $(BUILD_THREADS)
+# V=1 so we can see the full compile command and verify which diag.c is used
+ndkbuild=cd $(NDK_PROJECT_PATH) && $(NDK_BUILD) -j $(BUILD_THREADS) V=1
 ndkclean=cd $(NDK_PROJECT_PATH) && $(NDK_BUILD) clean
 ndkcleanobj=rm -rf $(NDK_PROJECT_PATH)/obj/
 
