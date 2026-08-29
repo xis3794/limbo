@@ -124,6 +124,11 @@ public class MachineService extends Service {
         }
 
         Log.d(TAG, "Starting VM: " + MachineController.getInstance().getMachine().getName());
+        // Dump full /proc/self/maps to logcat BEFORE loading native libs.
+        // This gives us the exact base address of libc, libqemu, glib, SDL etc.
+        // at the moment of the crash, so we can resolve backtrace PCs offline.
+        // Do this in a normal thread (logcat is safe here, unlike in a signal handler).
+        dumpMapsToLogcat();
         setupLocks();
 
         // notify we started
@@ -161,11 +166,44 @@ public class MachineService extends Service {
         System.exit(0);
     }
 
-
     public void cleanUp() {
         //XXX flush and close all file descriptors if we haven't already
         FileUtils.close_fds();
     }
+
+    /** Dump /proc/self/maps to logcat (tag "LimboMaps"), split into ~3KB chunks.
+     *  Called from a normal thread before loading QEMU, so logcat is safe.
+     *  Gives us libc + app lib base addresses to resolve crash backtraces. */
+    private void dumpMapsToLogcat() {
+        try {
+            java.io.BufferedReader br = new java.io.BufferedReader(
+                    new java.io.FileReader("/proc/self/maps"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            int chunk = 0;
+            while ((line = br.readLine()) != null) {
+                // keep only lines that name a .so library (r-xp code segment)
+                if (line.contains(".so") && line.contains("r-xp")) {
+                    sb.append(line).append('\n');
+                    if (sb.length() > 3000) {
+                        Log.i("LimboMaps", "--- maps chunk " + chunk + " ---");
+                        Log.i("LimboMaps", sb.toString());
+                        sb.setLength(0);
+                        chunk++;
+                    }
+                }
+            }
+            if (sb.length() > 0) {
+                Log.i("LimboMaps", "--- maps chunk " + chunk + " ---");
+                Log.i("LimboMaps", sb.toString());
+            }
+            br.close();
+            Log.i("LimboMaps", "--- maps dump complete ---");
+        } catch (Throwable t) {
+            Log.e(TAG, "dumpMapsToLogcat failed: " + t);
+        }
+    }
+
 
     private void setUpAsForeground(String text) {
         if (MachineController.getInstance().getMachine() == null) {
