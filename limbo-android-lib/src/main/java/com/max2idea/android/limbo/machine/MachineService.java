@@ -182,15 +182,14 @@ public class MachineService extends Service {
             String line;
             int chunk = 0;
             while ((line = br.readLine()) != null) {
-                // keep only lines that name a .so library (r-xp code segment)
-                if (line.contains(".so") && line.contains("r-xp")) {
-                    sb.append(line).append('\n');
-                    if (sb.length() > 3000) {
-                        Log.i("LimboMaps", "--- maps chunk " + chunk + " ---");
-                        Log.i("LimboMaps", sb.toString());
-                        sb.setLength(0);
-                        chunk++;
-                    }
+                // Output ALL lines (not just .so r-xp) so we can find
+                // anonymous mmap regions containing the crash mutex address
+                sb.append(line).append('\n');
+                if (sb.length() > 3000) {
+                    Log.i("LimboMaps", "--- maps chunk " + chunk + " ---");
+                    Log.i("LimboMaps", sb.toString());
+                    sb.setLength(0);
+                    chunk++;
                 }
             }
             if (sb.length() > 0) {
