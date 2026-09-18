@@ -355,11 +355,15 @@ private String getQemuLibrary() {
             cpu += ",-tsc";
         }
 
-        if (getMachine().getDisableAcpi() != 0) {
-            paramsList.add("-no-acpi"); //disable ACPI
-        }
-        if (getMachine().getDisableHPET() != 0) {
-            paramsList.add("-no-hpet"); //        disable HPET
+        // NOTE: for QEMU 9+ these are emitted as -M properties instead (see
+        // getMachineType) because the standalone options were removed.
+        if (LimboApplication.getQemuVersion() < 90000) {
+            if (getMachine().getDisableAcpi() != 0) {
+                paramsList.add("-no-acpi"); //disable ACPI
+            }
+            if (getMachine().getDisableHPET() != 0) {
+                paramsList.add("-no-hpet"); //        disable HPET
+            }
         }
 
         if (cpu != null && !cpu.equals("Default")) {
@@ -426,6 +430,20 @@ private String getQemuLibrary() {
         // mutex" -> the app aborts. Map such names onto the unversioned alias.
         if (machineType != null && LimboApplication.getQemuVersion() >= 90000) {
             machineType = normalizeVersionedMachineType(machineType);
+        }
+        // QEMU 9+ also removed the standalone -no-acpi / -no-hpet options
+        // (same class of breakage as the machine aliases above: QEMU would
+        // print "invalid option" and exit(1)). They are machine properties
+        // now, so fold them into the -M argument here.
+        if (machineType != null && LimboApplication.getQemuVersion() >= 90000) {
+            StringBuilder sb = new StringBuilder(machineType);
+            if (getMachine().getDisableAcpi() != 0) {
+                sb.append(",acpi=off");
+            }
+            if (getMachine().getDisableHPET() != 0) {
+                sb.append(",hpet=off");
+            }
+            machineType = sb.toString();
         }
         return machineType;
     }
