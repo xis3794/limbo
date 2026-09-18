@@ -1443,10 +1443,25 @@ public class LimboActivity extends AppCompatActivity
     }
 
     public void exit() {
-        if (MachineController.getInstance().isRunning())
+        if (MachineController.getInstance().isRunning()) {
             onStopButton(true);
-        else
-            System.exit(0);
+            return;
+        }
+        // IMPORTANT: do NOT use System.exit(0) here.
+        // System.exit() synchronously runs __cxa_finalize for every loaded
+        // library, which calls pthread_mutex_destroy() on static mutexes of
+        // libhwui.so / libgrallocutils.so while the UI and render threads are
+        // still alive. Those threads then hit
+        //   "FORTIFY: pthread_mutex_lock called on a destroyed mutex"
+        // and the app aborts (SIGABRT) -> looks like a random crash on exit.
+        // Finishing the task and SIGKILLing ourselves unloads the native libs
+        // without running any destructors.
+        try {
+            finishAndRemoveTask();
+        } catch (Throwable t) {
+            finish();
+        }
+        android.os.Process.killProcess(android.os.Process.myPid());
     }
 
     private void unlockRemovableDevices(boolean flag) {

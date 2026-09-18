@@ -162,8 +162,17 @@ public class MachineService extends Service {
         stopService();
 
         Log.d(TAG, "Exiting Limbo");
-        //XXX: We exit here to force unload the native libs
-        System.exit(0);
+        // IMPORTANT: do NOT use System.exit(0).
+        // System.exit() synchronously runs __cxa_finalize, i.e. the static
+        // destructors of every loaded library. Those destructors call
+        // pthread_mutex_destroy() on libhwui.so / libgrallocutils.so globals
+        // while the UI & render threads of this process are still running, so
+        // they immediately hit
+        //   "FORTIFY: pthread_mutex_lock called on a destroyed mutex"
+        // and the process aborts with SIGABRT.
+        // SIGKILLing ourselves still unloads the native libs (which is why
+        // this exit exists) but runs no destructors, so nothing races.
+        android.os.Process.killProcess(android.os.Process.myPid());
     }
 
     public void cleanUp() {
