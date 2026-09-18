@@ -78,7 +78,13 @@ SYNC_LIBS_SPARC=rsync -av --include='libqemu-system-sparc*.so' \
     --include='*/' --exclude='*' \
     ../libs/ $(LIMBO_APP_SPARC)/jniLibs/
 
-COPY_ROMS=-mkdir -p ../assets/roms && cp -rf ./qemu/pc-bios/*.rom \
+# NOTE: the destination (../assets/roms/) MUST be the last argument of the
+# SAME cp command. A previous `2>/dev/null || true` placed in the middle of
+# the argument list split the command, so cp ran with no destination and
+# NOTHING was copied -> APK shipped without bios.bin/vgabios*.bin and QEMU
+# failed instantly ("Could not load PC BIOS 'bios.bin'").
+COPY_ROMS=-mkdir -p ../assets/roms && cp -rf \
+./qemu/pc-bios/*.rom \
 ./qemu/pc-bios/*.bin \
 ./qemu/pc-bios/*.img \
 ./qemu/pc-bios/*.bmp \
@@ -86,9 +92,9 @@ COPY_ROMS=-mkdir -p ../assets/roms && cp -rf ./qemu/pc-bios/*.rom \
 ./qemu/pc-bios/*.svg \
 ./qemu/pc-bios/*.rsrc \
 ./qemu/pc-bios/openbios-* \
-./qemu/pc-bios/*.fd 2>/dev/null || true \
+./qemu/pc-bios/*.fd \
 ./qemu/pc-bios/README \
-../assets/roms/ || true
+../assets/roms/ 2>/dev/null || true
 
 COPY_KEYMAPS=cp -rf ./qemu/pc-bios/keymaps ../assets/roms/
 COPY_QEMU_VERSION=cp -f ./qemu/VERSION ../assets/QEMU_VERSION

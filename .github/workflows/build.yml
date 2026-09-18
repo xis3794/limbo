@@ -215,6 +215,31 @@ jobs:
           done
           echo "EFI firmware installed:"; ls -la limbo-android-x86/src/main/assets/roms/*.fd
 
+      - name: Verify BIOS/ROM assets are present (fail fast)
+        run: |
+          # QEMU cannot start without bios.bin / vgabios*.bin in the -L dir.
+          # These come from qemu/pc-bios via the Makefile COPY_ROMS rule, which
+          # was silently broken once (cp had no destination) and shipped an APK
+          # with only OVMF*.fd -> QEMU exited instantly and the app crashed.
+          MISSING=0
+          for f in bios.bin bios-256k.bin vgabios-stdvga.bin kvmvapic.bin; do
+            for d in limbo-android-lib/src/main/assets/roms limbo-android-x86/src/main/assets/roms; do
+              if [ ! -f "$d/$f" ]; then
+                echo "::error::MISSING $d/$f (BIOS assets not copied into the APK!)"
+                MISSING=1
+              fi
+            done
+          done
+          echo "=== pc-bios assets in module ==="
+          ls -la limbo-android-x86/src/main/assets/roms/ | head -40
+          echo "=== total files in assets/roms ==="
+          ls limbo-android-x86/src/main/assets/roms/ | wc -l
+          if [ "$MISSING" = "1" ]; then
+            echo "::error::BIOS assets missing; aborting build (APK would not boot QEMU)"
+            exit 1
+          fi
+          echo "OK: BIOS assets present"
+
       - name: Build APK with Gradle 7.0.2
         env:
           JAVA_HOME: ${{ steps.jdk11.outputs.path }}
