@@ -405,17 +405,56 @@ private String getQemuLibrary() {
 
     private String getMachineType() {
         String machineType = getMachine().getMachineType();
+        // "Default" is a UI placeholder, not a QEMU machine name: passing it
+        // through makes QEMU fail with 'unsupported machine type: "Default"'.
+        // Drop it and let QEMU (or the x86 default below) decide.
+        if (machineType != null && machineType.equalsIgnoreCase("Default")) {
+            machineType = null;
+        }
         if ((LimboApplication.arch == Config.Arch.x86 || LimboApplication.arch == Config.Arch.x86_64)
                 && machineType == null) {
             machineType = "pc";
-        } else if ((LimboApplication.arch == Config.Arch.ppc || LimboApplication.arch == Config.Arch.ppc64)
-                && machineType.equals("Default")) {
-            machineType = null;
-        } else if ((LimboApplication.arch == Config.Arch.sparc || LimboApplication.arch == Config.Arch.sparc64)
-                && machineType.equals("Default")) {
-            machineType = null;
+        }
+        // QEMU 9/10/11 dropped most of the old versioned machine aliases
+        // (the picker still offers names like "pc-q35-5.0"). Passing one makes
+        // QEMU print
+        //   libqemu-system-x86_64.so: unsupported machine type: "pc-q35-5.0"
+        // and call exit(1). That exit runs __cxa_finalize, i.e. the static
+        // destructors of every loaded library, which destroy the global mutexes
+        // of libhwui.so / libgrallocutils.so while the UI thread is still
+        // rendering -> "FORTIFY: pthread_mutex_lock called on a destroyed
+        // mutex" -> the app aborts. Map such names onto the unversioned alias.
+        if (machineType != null && LimboApplication.getQemuVersion() >= 90000) {
+            machineType = normalizeVersionedMachineType(machineType);
         }
         return machineType;
+    }
+
+    /**
+     * Turn a versioned QEMU machine name into the unversioned alias that
+     * current QEMU releases still provide:
+     *   pc-q35-5.0     -> q35
+     *   pc-i440fx-5.0  -> pc
+     *   pc-1.0 / pc-2.9-> pc
+     * Unversioned names (q35, pc, microvm, isapc, none, virt, ...) are kept.
+     */
+    private static String normalizeVersionedMachineType(String mt) {
+        if (mt == null) {
+            return null;
+        }
+        // strip a trailing "-<major>.<minor>" (or "-<major>) version suffix
+        String base = mt.replaceAll("-\\d+(\\.\\d+)?$", "");
+        if (base.equals("pc-q35") || base.equals("q35")) {
+            return "q35";
+        }
+        if (base.equals("pc-i440fx") || base.equals("pc")) {
+            return "pc";
+        }
+        if (base.startsWith("virt") || base.equals("none") || base.equals("microvm")
+                || base.equals("isapc")) {
+            return base;
+        }
+        return base;
     }
 
     private void addNetworkOptions(ArrayList<String> paramsList) throws Exception {

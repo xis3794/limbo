@@ -69,7 +69,8 @@ new_exe = """    emulator = shared_library(exe_name, exe['sources'],
                 link_depends: [block_syms, qemu_syms],
                 link_args: link_args + ['-Wl,-z,undefs', '-Wl,--no-undefined-version',
                 '-Wl,--wrap=open', '-Wl,--wrap=fopen', '-Wl,--wrap=close',
-                '-Wl,--wrap=stat', '-Wl,--wrap=mkstemp'])"""
+                '-Wl,--wrap=stat', '-Wl,--wrap=mkstemp',
+                '-Wl,--wrap=exit'])"""
 if old_exe in meson:
     meson = meson.replace(old_exe, new_exe, 1)
     log('[OK] meson.build: executable -> shared_library')

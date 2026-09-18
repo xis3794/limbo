@@ -12,6 +12,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "limbo_compat_filesystem.h"
@@ -170,4 +171,25 @@ int shm_unlink(const char *name)
     (void)name;
     errno = ENOSYS;
     return -1;
+}
+
+/* ------------------------------------------------------------------ */
+/* ld --wrap entry point for exit()                                    */
+/*                                                                     */
+/* QEMU terminates the process with exit(1) on fatal initialisation    */
+/* errors (e.g. "unsupported machine type: pc-q35-5.0"). A normal      */
+/* exit() runs __cxa_finalize, i.e. the static destructors of every    */
+/* library in the process, and those destructors call                  */
+/* pthread_mutex_destroy() on globals of libhwui.so /                  */
+/* libgrallocutils.so. The app's UI and render threads are still using */
+/* those libraries, so the process instantly dies with                 */
+/*   "FORTIFY: pthread_mutex_lock called on a destroyed mutex"         */
+/* which hides QEMU's real error message and looks like a random       */
+/* crash. Terminating with _exit() skips the destructors: the process  */
+/* still goes away (and MachineService already persisted the error     */
+/* message), but nothing is torn down under the UI threads' feet.      */
+/* ------------------------------------------------------------------ */
+void __wrap_exit(int status)
+{
+    _exit(status);
 }
