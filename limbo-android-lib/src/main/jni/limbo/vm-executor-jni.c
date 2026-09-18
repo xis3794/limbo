@@ -198,6 +198,26 @@ JNIEXPORT jstring JNICALL Java_com_max2idea_android_limbo_jni_VMExecutor_start(
 	printf("Starting VM");
     started = 1;
 
+    // Redirect fd 2 (stderr) to a file BEFORE dlopen'ing QEMU.
+    // GLib's g_error()/g_assert() and libc assert() write straight to fd 2,
+    // which bypasses the fprintf() macro redirection from limbo_logutils.h.
+    // On Android that output is simply discarded, so a QEMU startup abort
+    // looks completely silent (SIGABRT with no message anywhere).
+    // Capturing it lets us see the real reason QEMU exits.
+    {
+        int efd = open("/sdcard/Download/limbo_qemu_stderr.txt",
+                       O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (efd < 0) {
+            efd = open("/data/user/0/com.limbo.emu.main/cache/limbo_qemu_stderr.txt",
+                       O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        }
+        if (efd >= 0) {
+            dup2(efd, 2);
+            close(efd);
+            printf("[limbo] stderr redirected to limbo_qemu_stderr.txt\n");
+        }
+    }
+
     //LOAD LIB
 	const char *lib_filename_str = NULL;
 	if (lib_filename!= NULL)

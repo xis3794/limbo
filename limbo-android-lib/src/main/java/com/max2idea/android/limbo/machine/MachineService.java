@@ -145,6 +145,15 @@ public class MachineService extends Service {
             if (!res.equals("VM shutdown")) {
                 ToastUtils.toastLong(service, res);
                 Log.e(TAG, res);
+                // Also persist the QEMU error to a file: logcat gets rotated
+                // away very quickly on this device.
+                try {
+                    java.io.FileOutputStream fos = new java.io.FileOutputStream(
+                            "/sdcard/Download/limbo_vm_error.txt", true);
+                    fos.write(("[" + new java.util.Date() + "] " + res + "\n").getBytes());
+                    fos.close();
+                } catch (Throwable ignore) {
+                }
             } else {
                 Log.d(TAG, res);
                 //set the exit code
