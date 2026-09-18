@@ -178,6 +178,7 @@ public class LimboApplication extends Application {
         sInstance = getApplicationContext();
         logDiag("Application onCreate");
         installNativeDiag(); // load libdiag FIRST + forward previous native crash
+        harvestDiagnostics(); // republish previous run's QEMU stderr/errors
         super.onCreate();
         sInstance = this;
         try {
@@ -194,6 +195,55 @@ public class LimboApplication extends Application {
         MachineOpenHelper.initialize(this);
         FavOpenHelper.initialize(this);
         setupFolders();
+    }
+
+    /**
+     * Harvest diagnostic files written by the PREVIOUS run (QEMU's stderr and
+     * the VM error string) and republish them:
+     *   1. to logcat under the distinctive tag "LimboHarvest"
+     *   2. as a copy in /sdcard/Download/limbo_harvest_*.txt
+     * QEMU 11 builds disable the fprintf()/printf() redirection macros (they
+     * would clobber MonitorClass function pointers), so QEMU's error_report()
+     * output goes to the real fd 2. We redirect fd 2 to a file when starting
+     * the VM, and this method makes that file reachable from outside the app
+     * sandbox.
+     */
+    private void harvestDiagnostics() {
+        String[] srcs = new String[] {
+                "/sdcard/Download/limbo_qemu_stderr.txt",
+                "/data/user/0/com.limbo.emu.main/cache/limbo_qemu_stderr.txt",
+                "/data/data/com.limbo.emu.main/cache/limbo_qemu_stderr.txt",
+                "/sdcard/Download/limbo_vm_error.txt",
+                "/data/user/0/com.limbo.emu.main/cache/limbo_vm_error.txt",
+        };
+        for (String p : srcs) {
+            try {
+                File f = new File(p);
+                if (!f.exists() || f.length() == 0) {
+                    continue;
+                }
+                byte[] buf = new byte[(int) Math.min(f.length(), 32768)];
+                java.io.FileInputStream fis = new java.io.FileInputStream(f);
+                int n = fis.read(buf);
+                fis.close();
+                if (n <= 0) {
+                    continue;
+                }
+                String content = new String(buf, 0, n);
+                Log.i("LimboHarvest", "=== " + p + " (" + n + " bytes) ===");
+                Log.i("LimboHarvest", content);
+                String name = p.substring(p.lastIndexOf('/') + 1);
+                try {
+                    java.io.FileOutputStream fos = new java.io.FileOutputStream(
+                            "/sdcard/Download/limbo_harvest_" + name);
+                    fos.write(content.getBytes());
+                    fos.close();
+                } catch (Throwable ignore) {
+                }
+            } catch (Throwable t) {
+                Log.e(TAG, "harvest failed for " + p + ": " + t);
+            }
+        }
     }
 
     /**
