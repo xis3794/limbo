@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The x86 flavour overrides the OS download list. Without this file the
+         "Download OS / Images" screen stayed English even in Chinese. -->
+    <string name="DebianLinux">Debian Linux</string>
+    <string name="DebianLinuxDescr">活跃的开源 Linux 系统，带桌面图形界面、音频与网络</string>
+    <string name="DSLLinux">DSL Linux</string>
+    <string name="DSLLinuxDescr">老式轻量开源系统，带桌面图形界面、音频与网络</string>
+    <string name="Trinux">Trinux</string>
+    <string name="TrinuxDescr">老式开源命令行系统，带命令行、音频与网络</string>
+    <string name="Freedos">FreeDOS</string>
+    <string name="FreedosDescr">活跃的 DOS 兼容开源系统，带命令行、音频与网络</string>
+    <string name="KolibriOS">KolibriOS</string>
+    <string name="KolibriOSDescr">超轻量开源系统，带桌面图形界面、音频与网络</string>
+    <string name="SlaxLinux">Slax Linux</string>
+    <string name="SlaxLinuxDescr">活跃的开源系统，带桌面图形界面、音频与网络</string>
+    <string name="SlitazLinux">Slitaz Linux</string>
+    <string name="SlitazLinuxDescr">活跃的开源系统，带桌面图形界面、音频与网络</string>
+</resources>
