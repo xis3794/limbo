@@ -79,7 +79,7 @@ public class LimboApplication extends Application {
             Log.d(TAG, "Qemu Version Number: " + qemuVersion);
         } catch (Exception e) {
             e.printStackTrace();
-            ToastUtils.toastShort(context, "Could not load version information: " + e);
+            ToastUtils.toastShort(context, context.getString(R.string.VersionInfoFailedToast) + e);
         }
     }
 

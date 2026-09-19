@@ -345,19 +345,19 @@ private String getQemuLibrary() {
             paramsList.add("--trace");
             paramsList.add("file=" + Config.traceDir);
         }
-
-        if (Config.overrideTbSize) {
+        if (Config.overrideTbSize && LimboApplication.getQemuVersion() < 80000) {
+            // Legacy fallback for QEMU < 8.0, which still has the standalone
+            // -tb-size option.
+            //
+            // DO NOT use this on QEMU >= 8.0! There the option was removed and
+            // "tb-size" became a property of the tcg accelerator
+            // (-accel tcg,tb-size=N, N in MiB). Feeding "-tb-size N" to
+            // QEMU 8/11 makes it print "invalid option" and call exit(1). See
+            // addAccelerationOptions() below, which emits the accel property.
             paramsList.add("-tb-size");
             paramsList.add(Config.tbSize); //Don't increase it crashes
-        } else if (LimboApplication.getQemuVersion() >= 90000) {
-            // Performance: a bigger TCG translation-block cache means far fewer
-            // retranslations once the guest is warm, which is the single biggest
-            // TCG speed-up available on Android. Modern QEMU handles this size
-            // fine (the old "don't increase it crashes" note applied to the
-            // ancient 2.9/5.x builds).
-            paramsList.add("-tb-size");
-            paramsList.add("256M");
         }
+
 
         if (LimboApplication.getQemuVersion() == 20901) {
             paramsList.add("-realtime");
@@ -456,8 +456,107 @@ private String getQemuLibrary() {
             } else {
                 tcgParams += ",thread=single";
             }
+            // Performance: a bigger TCG translation-block cache means far fewer
+            // retranslations once the guest is warm, which is the single biggest
+            // TCG speed-up available on Android.
+            String tbSize = getTbSizeParam();
+            if (tbSize != null) {
+                tcgParams += ",tb-size=" + tbSize;
+            }
             paramsList.add(tcgParams);
         }
+    }
+
+    private static int sAutoTbSizeMiB = -1;
+
+    /**
+     * TB (translation block) cache size in MiB, or null to keep QEMU's own
+     * default.
+     *
+     * QEMU 8.0 turned "tb-size" into a uint32 property of the tcg accelerator
+     * (-accel tcg,tb-size=N) and removed the standalone -tb-size option, so
+     * the value must be a plain number of MiB - a "256M" style suffix is
+     * rejected ("invalid option" -> exit(1) -> the app would vanish silently).
+     *
+     * QEMU's default is MIN(1 GiB, guest_ram / 8), i.e.128 MiB for the usual
+     * 1 GiB guest. The buffer is only committed as translated code is written
+     * into it, so when the phone still has plenty of free RAM we can hand TCG
+     * a somewhat larger cache and win real speed.
+     */
+    private String getTbSizeParam() {
+
+        if (Config.overrideTbSize) {
+            String v = normalizeTbSize(Config.tbSize);
+            if (v != null) {
+                return v;
+            }
+        }
+        if (LimboApplication.getQemuVersion() < 80000) {
+            return null;
+        }
+        int auto = autoTbSizeMiB();
+        return auto > 0 ? ("" + auto) : null;
+    }
+
+    /** "32M" / "1G" / "256" -> "32" / "1024" / "256" (MiB, no suffix). */
+    private static String normalizeTbSize(String raw) {
+
+        if (raw == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("^\\s*(\\d+)\\s*([a-zA-Z]*)\\s*$").matcher(raw);
+        if (!m.matches()) {
+            return null;
+        }
+        long value = Long.parseLong(m.group(1));
+        String unit = m.group(2).toLowerCase(java.util.Locale.ROOT);
+        if (unit.startsWith("g")) {
+            value = value * 1024;
+        } else if (unit.length() > 0 && !unit.startsWith("m")) {
+            return null; // unknown unit (e.g. "K"): QEMU would reject it
+        }
+        if (value < 1 || value > 1024) {
+            return null;
+        }
+        return "" + value;
+    }
+
+    /**
+     * Pick the TB cache size from the memory the device actually has free.
+     * Reading MemAvailable from /proc/meminfo needs no permission and is far
+     * more reliable than asking ActivityManager from a non-UI thread.
+     */
+    private static int autoTbSizeMiB() {
+
+        if (sAutoTbSizeMiB >= 0) {
+            return sAutoTbSizeMiB;
+        }
+        sAutoTbSizeMiB = 0;
+        try {
+            java.io.BufferedReader br = new java.io.BufferedReader(
+                    new java.io.FileReader("/proc/meminfo"));
+            String line;
+            long availKb = 0;
+            while ((line = br.readLine()) != null) {
+                if (line.startsWith("MemAvailable:")) {
+                    availKb = Long.parseLong(line.replaceAll("[^0-9]", ""));
+                    break;
+                }
+            }
+            br.close();
+            long availMiB = availKb / 1024;
+            if (availMiB >= 2048) {
+                sAutoTbSizeMiB = 256;
+            } else if (availMiB >= 1024) {
+                sAutoTbSizeMiB = 128;
+            }
+            Log.d(TAG, "Auto TB cache: " + sAutoTbSizeMiB + " MiB (free " + availMiB + " MiB)");
+        } catch (Throwable t) {
+            sAutoTbSizeMiB = 0;
+            Log.w(TAG, "Could not read /proc/meminfo: " + t);
+        }
+        return sAutoTbSizeMiB;
     }
 
     private String getMachineType() {

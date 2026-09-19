@@ -1988,20 +1988,21 @@ public class LimboActivity extends AppCompatActivity
         if (clear || getMachine() == null || mMachine.getSelectedItemPosition() < 2)
             mCPUSectionSummary.setText("");
         else {
-            String text = "Machine Type: " + getMachine().getMachineType()
-                    + ", CPU: " + getMachine().getCpu()
-                    + ", " + getMachine().getCpuNum() + " CPU" + ((getMachine().getCpuNum() > 1) ? "s" : "")
+            String text = getString(R.string.MachineTypeLabel) + " " + getMachine().getMachineType()
+                    + ", " + getString(R.string.CpuModelLabel) + getMachine().getCpu()
+                    + ", " + getMachine().getCpuNum() + getString(R.string.CpuCoresSuffix)
+                    + ((getMachine().getCpuNum() > 1) ? getString(R.string.CpuCoresPlural) : "")
                     + ", " + getMachine().getMemory() + " MB";
             if (mEnableMTTCG.isChecked())
-                text = appendOption("Enable MTTCG", text);
+                text = appendOption(getString(R.string.enableMTTCG), text);
             if (mEnableKVM.isChecked())
-                text = appendOption("Enable KVM", text);
+                text = appendOption(getString(R.string.EnableKVM), text);
             if (mDisableACPI.isChecked())
-                text = appendOption("Disable ACPI", text);
+                text = appendOption(getString(R.string.DisableAcpiLabel), text);
             if (mDisableHPET.isChecked())
-                text = appendOption("Disable HPET", text);
+                text = appendOption(getString(R.string.DisableHpetLabel), text);
             if (mDisableTSC.isChecked())
-                text = appendOption("Disable TSC", text);
+                text = appendOption(getString(R.string.DisableTscLabel), text);
             mCPUSectionSummary.setText(text);
         }
     }
@@ -2021,7 +2022,7 @@ public class LimboActivity extends AppCompatActivity
                         getString(R.string.SharedFolder), false);
 
             if (text == null || text.equals("'"))
-                text = "None";
+                text = getString(R.string.NoneLabel);
             mStorageSectionSummary.setText(text);
         }
     }
@@ -2039,8 +2040,7 @@ public class LimboActivity extends AppCompatActivity
 
 
             if (text == null || text.equals(""))
-                text = "None";
-
+                text = getString(R.string.NoneLabel);
             mRemovableStorageSectionSummary.setText(text);
         }
     }
@@ -2049,10 +2049,10 @@ public class LimboActivity extends AppCompatActivity
         if (clear || getMachine() == null || mMachine.getSelectedItemPosition() < 2)
             mBootSectionSummary.setText("");
         else {
-            String text = "Boot from: " + getMachine().getBootDevice();
-            text = appendDriveFilename(getMachine().getKernel(), text, "kernel", false);
-            text = appendDriveFilename(getMachine().getInitRd(), text, "initrd", false);
-            text = appendDriveFilename(getMachine().getAppend(), text, "append", false);
+            String text = getString(R.string.BootFromLabel) + getMachine().getBootDevice();
+            text = appendDriveFilename(getMachine().getKernel(), text, getString(R.string.BareKernel), false);
+            text = appendDriveFilename(getMachine().getInitRd(), text, getString(R.string.BareInitrd), false);
+            text = appendDriveFilename(getMachine().getAppend(), text, getString(R.string.BareAppend), false);
             mBootSectionSummary.setText(text);
         }
     }
@@ -2062,7 +2062,7 @@ public class LimboActivity extends AppCompatActivity
         String file = null;
         if (driveFile != null) {
             if ((driveFile.equals("") || driveFile.equals("None")) && allowEmptyDrive) {
-                file = drive + ": Empty";
+                file = drive + getString(R.string.DriveEmptyLabel);
             } else if (!driveFile.equals("") && !driveFile.equals("None"))
                 file = drive + ": " + FileUtils.getFilenameFromPath(driveFile);
         }
@@ -2077,7 +2077,7 @@ public class LimboActivity extends AppCompatActivity
         if (clear || getMachine() == null || mMachine.getSelectedItemPosition() < 2)
             mGraphicsSectionSummary.setText("");
         else {
-            String text = "Video Card: " + getMachine().getVga();
+            String text = getString(R.string.VideoDisplayLabel) + getMachine().getVga();
             mGraphicsSectionSummary.setText(text);
         }
     }
@@ -2088,7 +2088,8 @@ public class LimboActivity extends AppCompatActivity
             mAudioSectionSummary.setText("");
         else {
             String soundCard = getMachine().getSoundCard();
-            String text = getString(R.string.AudioCard) + ": " + (soundCard != null ? soundCard : "None");
+            String text = getString(R.string.SoundCardLabel)
+                    + (soundCard != null ? soundCard : getString(R.string.NoneLabel));
             mAudioSectionSummary.setText(text);
         }
     }
@@ -2099,10 +2100,12 @@ public class LimboActivity extends AppCompatActivity
             mNetworkSectionSummary.setText("");
         else {
             String netCfg = getMachine().getNetwork();
-            String text = getString(R.string.Network) + ": " + (netCfg != null ? netCfg : "None");
+            String text = getString(R.string.Network) + ": "
+                    + (netCfg != null ? netCfg : getString(R.string.NoneLabel));
             if (netCfg != null && !netCfg.equals("None")) {
                 String nicCard = getMachine().getNetworkCard();
-                text += ", " + getString(R.string.NicCard) + ": " + (nicCard != null ? nicCard : "None");
+                text += ", " + getString(R.string.NicCard) + ": "
+                        + (nicCard != null ? nicCard : getString(R.string.NoneLabel));
                 text += ", " + getString(R.string.DNSServer) + ": " + mDNS.getText();
                 String hostFWD = getMachine().getHostFwd();
                 if (hostFWD != null && !hostFWD.equals(""))

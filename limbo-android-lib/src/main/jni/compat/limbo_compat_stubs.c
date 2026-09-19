@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <android/log.h>
 #include "limbo_compat_filesystem.h"
 
 /* NOTE: _rwlock_* stubs live in compat/musl/musl-stubs.c (they are on
@@ -177,7 +178,9 @@ int shm_unlink(const char *name)
 /* ld --wrap entry point for exit()                                    */
 /*                                                                     */
 /* QEMU terminates the process with exit(1) on fatal initialisation    */
-/* errors (e.g. "unsupported machine type: pc-q35-5.0"). A normal      */
+/* errors (e.g. "unsupported machine type: pc-q35-5.0" or an option it */
+/* does not know any more, such as the standalone -tb-size of QEMU<8). */
+/* A normal                                                           */
 /* exit() runs __cxa_finalize, i.e. the static destructors of every    */
 /* library in the process, and those destructors call                  */
 /* pthread_mutex_destroy() on globals of libhwui.so /                  */
@@ -186,10 +189,37 @@ int shm_unlink(const char *name)
 /*   "FORTIFY: pthread_mutex_lock called on a destroyed mutex"         */
 /* which hides QEMU's real error message and looks like a random       */
 /* crash. Terminating with _exit() skips the destructors: the process  */
-/* still goes away (and MachineService already persisted the error     */
-/* message), but nothing is torn down under the UI threads' feet.      */
+/* still goes away but nothing is torn down under the UI threads' feet.*/
+/*                                                                     */
+/* Because _exit() also skips the normal log flushing, the reason for  */
+/* the exit would otherwise be invisible (fd 2 was redirected to a     */
+/* file before QEMU was dlopen'ed - see vm-executor-jni.c). Read that  */
+/* file back and push it to logcat first, so a fatal QEMU error shows  */
+/* up immediately instead of only after the next app start.            */
 /* ------------------------------------------------------------------ */
+static void limbo_log_captured_stderr(void)
+{
+    char buf[2048];
+    ssize_t n;
+
+    /* make sure everything QEMU wrote is on disk before reading it back */
+    fsync(2);
+
+    /* fd 2 is the capture file, opened O_RDWR by the JNI layer. If the
+     * redirect failed (or fd 2 is a tty/pipe) this fails and we skip. */
+    if (lseek(2, 0, SEEK_SET) == (off_t)-1) {
+        return;
+    }
+    while ((n = read(2, buf, sizeof(buf) - 1)) > 0) {
+        buf[n] = '\0';
+        __android_log_write(ANDROID_LOG_ERROR, "LimboQemuFatal", buf);
+    }
+    __android_log_write(ANDROID_LOG_ERROR, "LimboQemuFatal",
+                        "[limbo] QEMU called exit(): see the lines above");
+}
+
 void __wrap_exit(int status)
 {
+    limbo_log_captured_stderr();
     _exit(status);
 }

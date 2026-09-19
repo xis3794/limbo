@@ -32,7 +32,7 @@
             android:layout_gravity="center|center_vertical"
             android:gravity="center|center_vertical"
             android:padding="10dp"
-            android:text="Boot"
+            android:text="@string/BootLabel"
             android:textSize="20sp"
             android:textStyle="bold" />
 
@@ -77,7 +77,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:text="Boot from Device: "
+                android:text="@string/BootFromLabel"
                 android:textSize="15sp" />
 
             <Spinner
@@ -142,7 +142,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:text="Kernel: "
+                android:text="@string/KernelLabel"
                 android:textSize="15sp" />
 
             <Spinner
@@ -175,7 +175,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:text="Initrd: "
+                android:text="@string/InitrdLabel"
                 android:textSize="15sp" />
 
             <Spinner
@@ -202,7 +202,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:text="Append: "
+                android:text="@string/AppendLabel"
                 android:textSize="15sp" />
 
             <EditText
@@ -210,7 +210,7 @@
                 android:layout_width="fill_parent"
                 android:layout_height="wrap_content"
                 android:gravity="right"
-                android:hint="ie: root=/dev/sda1"
+                android:hint="@string/AppendHintLabel"
                 android:inputType="textFilter|textNoSuggestions"
                 android:singleLine="true"
                 android:text=""

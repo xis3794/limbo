@@ -39,7 +39,10 @@ public class Machine extends Observable {
     private String cpu = "Default";
     private int cpuNum = 1;
     private int memory = 128;
-    private int enableMTTCG;
+    // MTTCG (multi-threaded TCG) is the single biggest performance win for
+    // SMP guests on Android, so new machines default to it. Users can still
+    // turn it off per machine (LimboActivity shows the MTTCG warning dialog).
+    private int enableMTTCG = 1;
     private int enableKVM;
     private int disableACPI = 0;
     private int disableHPET = 0;

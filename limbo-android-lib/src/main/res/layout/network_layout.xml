@@ -30,7 +30,7 @@
             android:layout_gravity="center|center_vertical"
             android:gravity="center|center_vertical"
             android:padding="10dp"
-            android:text="Network"
+            android:text="@string/NetworkLabel"
             android:textSize="20sp"
             android:textStyle="bold" />
 
@@ -74,7 +74,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:text="Network: "
+                android:text="@string/NetworkModeLabel"
                 android:textSize="15sp" />
 
             <Spinner
@@ -106,7 +106,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:text="Network Card: "
+                android:text="@string/NetworkCardLabel"
                 android:textSize="15sp" />
 
             <Spinner
@@ -139,7 +139,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:text="DNS Server: "
+                android:text="@string/DnsServerLabel"
                 android:textSize="15sp" />
 
             <EditText
@@ -168,7 +168,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:text="Host Forward: "
+                android:text="@string/HostForwardLabel"
                 android:textSize="15sp" />
 
             <EditText

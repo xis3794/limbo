@@ -205,11 +205,13 @@ JNIEXPORT jstring JNICALL Java_com_max2idea_android_limbo_jni_VMExecutor_start(
     // looks completely silent (SIGABRT with no message anywhere).
     // Capturing it lets us see the real reason QEMU exits.
     {
+        // O_RDWR (not O_WRONLY) so __wrap_exit() can read the captured output
+        // back and push it to logcat before the process disappears.
         int efd = open("/sdcard/Download/limbo_qemu_stderr.txt",
-                       O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                       O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (efd < 0) {
             efd = open("/data/user/0/com.limbo.emu.main/cache/limbo_qemu_stderr.txt",
-                       O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                       O_RDWR | O_CREAT | O_TRUNC, 0644);
         }
         if (efd >= 0) {
             dup2(efd, 2);
