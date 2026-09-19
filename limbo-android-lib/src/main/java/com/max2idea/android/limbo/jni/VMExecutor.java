@@ -231,10 +231,55 @@ private String getQemuLibrary() {
             paramsList.add(getMachine().getKeyboard());
         }
 
-        if (getMachine().getMouse() != null && !getMachine().getMouse().equals("ps2")) {
+        // The mouse spinner shows "usb-tablet (Fixes Mouse)" / "usb-tablet（修正鼠标）"
+        // i.e. the QEMU device name plus a localized hint. Only the first token is
+        // a valid -device argument, otherwise QEMU fails with "invalid device".
+        String mouseDevice = getMachine().getMouse();
+        if (mouseDevice != null) {
+            int hintStart = mouseDevice.indexOf(' ');
+            if (hintStart < 0) {
+                hintStart = mouseDevice.indexOf('(');
+            }
+            if (hintStart < 0) {
+                hintStart = mouseDevice.indexOf('（');
+            }
+            if (hintStart > 0) {
+                mouseDevice = mouseDevice.substring(0, hintStart).trim();
+            }
+        }
+        if (mouseDevice != null && !mouseDevice.equals("ps2")) {
             paramsList.add("-usb");
             paramsList.add("-device");
-            paramsList.add(getMachine().getMouse());
+            paramsList.add(mouseDevice);
+        }
+
+        // Boot firmware: when an EFI image is selected (Limbo Plus style),
+        // boot the guest from OVMF / VMware EFI instead of SeaBIOS.
+        // The firmware files are shipped in the APK assets and extracted to the
+        // base file dir (the same directory that is passed to QEMU as -L).
+        String firmware = getMachine().getFirmware();
+        if (firmware != null && firmware.toUpperCase(java.util.Locale.ROOT).contains("EFI")) {
+            String fwName;
+            boolean vmware = firmware.toUpperCase(java.util.Locale.ROOT).contains("VMWARE");
+            if (vmware) {
+                fwName = "VMWARE_EFI.fd";
+            } else if (LimboApplication.arch == Config.Arch.x86) {
+                fwName = "OVMF-pure-efi.fd";
+            } else if (LimboApplication.arch == Config.Arch.arm) {
+                fwName = "OVMF-arm.fd";
+            } else if (LimboApplication.arch == Config.Arch.arm64) {
+                fwName = "OVMF-arm64.fd";
+            } else {
+                fwName = "OVMF-pure-efi64.fd";
+            }
+            java.io.File fw = new java.io.File(LimboApplication.getBasefileDir(), fwName);
+            if (fw.exists()) {
+                paramsList.add("-bios");
+                paramsList.add(fw.getAbsolutePath());
+                Log.d(TAG, "EFI firmware: " + fw.getAbsolutePath());
+            } else {
+                Log.e(TAG, "EFI firmware file not found: " + fw.getAbsolutePath());
+            }
         }
     }
 
@@ -304,6 +349,14 @@ private String getQemuLibrary() {
         if (Config.overrideTbSize) {
             paramsList.add("-tb-size");
             paramsList.add(Config.tbSize); //Don't increase it crashes
+        } else if (LimboApplication.getQemuVersion() >= 90000) {
+            // Performance: a bigger TCG translation-block cache means far fewer
+            // retranslations once the guest is warm, which is the single biggest
+            // TCG speed-up available on Android. Modern QEMU handles this size
+            // fine (the old "don't increase it crashes" note applied to the
+            // ancient 2.9/5.x builds).
+            paramsList.add("-tb-size");
+            paramsList.add("256M");
         }
 
         if (LimboApplication.getQemuVersion() == 20901) {

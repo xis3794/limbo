@@ -101,6 +101,16 @@ public class ArchDefinitions {
         return vgaValues;
     }
 
+    public static ArrayList<String> getFirmwareValues(Context context) {
+        ArrayList<String> arrList = new ArrayList<>();
+        // The stored value doubles as the spinner label; VMExecutor only looks
+        // for the "EFI" prefix, so localizing the labels is safe.
+        arrList.add(context.getString(R.string.firmwareDefault));
+        arrList.add(context.getString(R.string.firmwareEfi64));
+        arrList.add(context.getString(R.string.firmwareEfiVmware));
+        return arrList;
+    }
+
     public static ArrayList<String> getKeyboardValues(Context context) {
         ArrayList<String> arrList = new ArrayList<>();
         arrList.add("en-us");

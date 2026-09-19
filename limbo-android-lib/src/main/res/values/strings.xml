@@ -372,4 +372,8 @@
     <string name="IgnoreBreakpointInvalidationSummary">Ignore Breakpoint Invalidation</string>
     <string name="ImportBIOSFile">Import BIOS</string>
     <string name="importBIOSInstructions">Select a BIOS file (bin, rom, etc..) to import.</string>
+    <string name="FirmwareLabel">Firmware: </string>
+    <string name="firmwareDefault">Default (SeaBIOS)</string>
+    <string name="firmwareEfi64">EFI (OVMF x86_64)</string>
+    <string name="firmwareEfiVmware">EFI (VMware)</string>
 </resources>

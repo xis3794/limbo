@@ -92,6 +92,38 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/firmwarel"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:paddingRight="5dp"
+                android:src="@drawable/sysfile" />
+
+            <TextView
+                android:id="@+id/firmwarestr"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:text="@string/FirmwareLabel"
+                android:textSize="15sp" />
+
+            <Spinner
+                android:id="@+id/firmwareval"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:gravity="right"
+                android:singleLine="true"
+                android:text=""
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/kernell"
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"

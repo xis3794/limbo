@@ -72,6 +72,8 @@ public class Machine extends Observable {
     private String kernel;
     private String initRd;
     private String append;
+    // Boot firmware: "Default" (SeaBIOS) or an EFI image (OVMF / VMware EFI)
+    private String firmware = "Default";
     // net
     private String network = null;
     private String networkCard = "ne2k_pci";
@@ -469,6 +471,18 @@ public class Machine extends Observable {
             this.bootDevice = bootDevice;
             setChanged();
             notifyChanged(MachineProperty.BOOT_CONFIG, bootDevice);
+        }
+    }
+
+    public String getFirmware() {
+        return firmware;
+    }
+
+    void setFirmware(String firmware) {
+        if (this.firmware == null || !this.firmware.equals(firmware)) {
+            this.firmware = firmware;
+            setChanged();
+            notifyChanged(MachineProperty.FIRMWARE, firmware);
         }
     }
 

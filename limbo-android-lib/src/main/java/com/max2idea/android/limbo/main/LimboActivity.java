@@ -158,6 +158,7 @@ public class LimboActivity extends AppCompatActivity
     // misc
     private Spinner mRamSize;
     private Spinner mBootDevices;
+    private Spinner mFirmware;
     private Spinner mNetworkCard;
     private Spinner mNetConfig;
     private Spinner mVGAConfig;
@@ -452,6 +453,21 @@ public class LimboActivity extends AppCompatActivity
             public void onNothingSelected(AdapterView<?> parentView) {
             }
         });
+
+        if (mFirmware != null) {
+            mFirmware.setOnItemSelectedListener(new OnItemSelectedListener() {
+                public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
+                    if (getMachine() == null)
+                        return;
+
+                    String firmware = (String) ((ArrayAdapter<?>) mFirmware.getAdapter()).getItem(position);
+                    notifyFieldChange(MachineProperty.FIRMWARE, firmware);
+                }
+
+                public void onNothingSelected(AdapterView<?> parentView) {
+                }
+            });
+        }
 
         mNetConfig.setOnItemSelectedListener(new OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
@@ -1332,6 +1348,7 @@ public class LimboActivity extends AppCompatActivity
         populateNet();
         populateNetDevices(null);
         populateVGA();
+        populateFirmware();
         populateSoundcardConfig();
         populateUI();
         populateKeyboardLayout();
@@ -1513,6 +1530,9 @@ public class LimboActivity extends AppCompatActivity
 
         //boot
         mBootDevices.setEnabled(flag);
+        if (mFirmware != null) {
+            mFirmware.setEnabled(flag);
+        }
         mKernel.setEnabled(flag);
         mInitrd.setEnabled(flag);
         mAppend.setEnabled(flag);
@@ -1741,6 +1761,7 @@ public class LimboActivity extends AppCompatActivity
 
         //boot
         mBootDevices = findViewById(R.id.bootfromval);
+        mFirmware = findViewById(R.id.firmwareval);
         mKernel = findViewById(R.id.kernelval);
         mInitrd = findViewById(R.id.initrdval);
         mAppend = findViewById(R.id.appendval);
@@ -2210,6 +2231,9 @@ public class LimboActivity extends AppCompatActivity
 
         // Advance
         SpinnerAdapter.setDiskAdapterValue(mBootDevices, getMachine().getBootDevice());
+        if (mFirmware != null) {
+            SpinnerAdapter.setDiskAdapterValue(mFirmware, getMachine().getFirmware());
+        }
         SpinnerAdapter.setDiskAdapterValue(mNetConfig, getMachine().getNetwork());
         SpinnerAdapter.setDiskAdapterValue(mVGAConfig, getMachine().getVga());
         SpinnerAdapter.setDiskAdapterValue(mSoundCard, getMachine().getSoundCard());
@@ -2589,6 +2613,16 @@ public class LimboActivity extends AppCompatActivity
         vgaAdapter.setDropDownViewResource(R.layout.custom_spinner_dropdown_item);
         mVGAConfig.setAdapter(vgaAdapter);
         mVGAConfig.invalidate();
+    }
+private void populateFirmware() {
+        if (mFirmware == null) {
+            return;
+        }
+        ArrayList<String> arrList = ArchDefinitions.getFirmwareValues(this);
+        ArrayAdapter<String> firmwareAdapter = new ArrayAdapter<>(this, R.layout.custom_spinner_item, arrList);
+        firmwareAdapter.setDropDownViewResource(R.layout.custom_spinner_dropdown_item);
+        mFirmware.setAdapter(firmwareAdapter);
+        mFirmware.invalidate();
     }
 
     private void populateKeyboardLayout() {
