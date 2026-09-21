@@ -28,6 +28,7 @@ import android.os.Environment;
 import android.util.Log;
 
 import com.max2idea.android.limbo.files.FileUtils;
+import com.limbo.emu.lib.R;
 import com.max2idea.android.limbo.machine.Dispatcher;
 import com.max2idea.android.limbo.machine.FavOpenHelper;
 import com.max2idea.android.limbo.machine.MachineOpenHelper;
