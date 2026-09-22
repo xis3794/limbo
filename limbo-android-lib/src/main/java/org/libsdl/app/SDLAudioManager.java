@@ -42,8 +42,16 @@ public class SDLAudioManager
         desiredFrames = Math.max(desiredFrames, (AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioFormat) + frameSize - 1) / frameSize);
 
         if (mAudioTrack == null) {
-            mAudioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, sampleRate,
-                    channelConfig, audioFormat, desiredFrames * frameSize, AudioTrack.MODE_STREAM);
+            try {
+                mAudioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, sampleRate,
+                        channelConfig, audioFormat, desiredFrames * frameSize, AudioTrack.MODE_STREAM);
+            } catch (Throwable t) {
+                // An exception thrown here would escape into JNI and make ART
+                // abort the whole app, so fail the open instead.
+                Log.e(TAG, "Could not create AudioTrack: " + t);
+                mAudioTrack = null;
+                return -1;
+            }
 
             // Instantiating AudioTrack can "succeed" without an exception and the track may still be invalid
             // Ref: https://android.googlesource.com/platform/frameworks/base/+/refs/heads/master/media/java/android/media/AudioTrack.java
@@ -131,8 +139,15 @@ public class SDLAudioManager
         desiredFrames = Math.max(desiredFrames, (AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat) + frameSize - 1) / frameSize);
 
         if (mAudioRecord == null) {
-            mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate,
-                    channelConfig, audioFormat, desiredFrames * frameSize);
+            try {
+                mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate,
+                        channelConfig, audioFormat, desiredFrames * frameSize);
+            } catch (Throwable t) {
+                // Same reasoning as audioOpen(): never let it escape into JNI.
+                Log.e(TAG, "Could not create AudioRecord: " + t);
+                mAudioRecord = null;
+                return -1;
+            }
 
             // see notes about AudioTrack state in audioOpen(), above. Probably also applies here.
             if (mAudioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
@@ -152,16 +167,38 @@ public class SDLAudioManager
 
     /** This method is called by SDL using JNI. */
     public static int captureReadShortBuffer(short[] buffer, boolean blocking) {
-        // !!! FIXME: this is available in API Level 23. Until then, we always block.  :(
-        //return mAudioRecord.read(buffer, 0, buffer.length, blocking ? AudioRecord.READ_BLOCKING : AudioRecord.READ_NON_BLOCKING);
-        return mAudioRecord.read(buffer, 0, buffer.length);
+        if (buffer == null || mAudioRecord == null) {
+            // SDL's Android_JNI_FlushCapturedAudio() calls us with a NULL buffer
+            // on purpose (it only wants the queue drained) and mAudioRecord is
+            // null whenever capture was never opened. Dereferencing either one
+            // threw NullPointerException from the audio thread, and an exception
+            // escaping into JNI makes ART abort the whole process.
+            return 0;
+        }
+        try {
+            // !!! FIXME: this is available in API Level 23. Until then, we always block.  :(
+            //return mAudioRecord.read(buffer, 0, buffer.length, blocking ? AudioRecord.READ_BLOCKING : AudioRecord.READ_NON_BLOCKING);
+            return mAudioRecord.read(buffer, 0, buffer.length);
+        } catch (Throwable t) {
+            Log.e(TAG, "SDL capture: read(short) failed: " + t);
+            return -1;
+        }
     }
 
     /** This method is called by SDL using JNI. */
     public static int captureReadByteBuffer(byte[] buffer, boolean blocking) {
-        // !!! FIXME: this is available in API Level 23. Until then, we always block.  :(
-        //return mAudioRecord.read(buffer, 0, buffer.length, blocking ? AudioRecord.READ_BLOCKING : AudioRecord.READ_NON_BLOCKING);
-        return mAudioRecord.read(buffer, 0, buffer.length);
+        if (buffer == null || mAudioRecord == null) {
+            // See captureReadShortBuffer(): a NULL buffer means "just flush".
+            return 0;
+        }
+        try {
+            // !!! FIXME: this is available in API Level 23. Until then, we always block.  :(
+            //return mAudioRecord.read(buffer, 0, buffer.length, blocking ? AudioRecord.READ_BLOCKING : AudioRecord.READ_NON_BLOCKING);
+            return mAudioRecord.read(buffer, 0, buffer.length);
+        } catch (Throwable t) {
+            Log.e(TAG, "SDL capture: read(byte) failed: " + t);
+            return -1;
+        }
     }
 
 
