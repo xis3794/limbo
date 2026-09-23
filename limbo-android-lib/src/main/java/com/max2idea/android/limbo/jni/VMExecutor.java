@@ -296,8 +296,19 @@ private String getQemuLibrary() {
         String card = getSoundCard();
         if (card == null || card.equals("None"))
             return;
+        // QEMU's "sdl" audio backend needs SDL's Java side (it calls back into
+        // SDLAudioManager from its audio thread). If that bridge could not be
+        // installed - which can only happen in VNC mode, see
+        // LimboApplication.prepareSdlBridge() - fall back to the null backend
+        // instead of letting QEMU's audio thread crash the whole process.
+        String audioDriver = "sdl";
+        if (MachineController.getInstance().isVNCEnabled()
+                && !LimboApplication.isSdlBridgeReady()) {
+            Log.w(TAG, "SDL bridge unavailable, using the null audio backend");
+            audioDriver = "none";
+        }
         paramsList.add("-audiodev");
-        paramsList.add("sdl,id=snd0");
+        paramsList.add(audioDriver + ",id=snd0");
         if (card.equals("hda")) {
             paramsList.add("-device");
             paramsList.add("intel-hda");

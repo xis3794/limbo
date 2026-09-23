@@ -209,6 +209,43 @@ public class LimboApplication extends Application {
      * the VM, and this method makes that file reachable from outside the app
      * sandbox.
      */
+    private static boolean sSdlBridgeReady;
+
+    /**
+     * Install SDL's Java&lt;-&gt;native bridge.
+     *
+     * QEMU links against libSDL2 (its display as well as the "-audiodev sdl"
+     * backend), and SDL's native code calls back into the Java classes
+     * (SDLActivity / SDLAudioManager / SDLControllerManager). Those references
+     * are cached by SDL.setupJNI(), which SDLActivity.onCreate() normally calls
+     * - but VNC mode never starts the SDL activity, so the native side had no
+     * class or method references at all: the first SDL call made from QEMU's
+     * thread killed the process with no log output whatsoever (the log stops
+     * right after SDL's "Request to get environment variables before JNI is
+     * ready" warning). Installing the bridge before the VM starts makes both
+     * UI modes behave the same; it is a no-op when SDL is already set up.
+     *
+     * @return true when SDL's Java side is usable
+     */
+    public static synchronized boolean prepareSdlBridge() {
+        if (sSdlBridgeReady) {
+            return true;
+        }
+        try {
+            System.loadLibrary("SDL2");
+            org.libsdl.app.SDL.setupJNI();
+            sSdlBridgeReady = true;
+            Log.d(TAG, "SDL JNI bridge installed");
+        } catch (Throwable t) {
+            Log.e(TAG, "Could not install the SDL JNI bridge: " + t);
+        }
+        return sSdlBridgeReady;
+    }
+
+    public static boolean isSdlBridgeReady() {
+        return sSdlBridgeReady;
+    }
+
     private void harvestDiagnostics() {
         String[] srcs = new String[] {
                 "/sdcard/Download/limbo_qemu_stderr.txt",

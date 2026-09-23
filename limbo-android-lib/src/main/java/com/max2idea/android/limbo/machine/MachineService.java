@@ -41,6 +41,7 @@ import com.limbo.emu.lib.R;
 import com.max2idea.android.limbo.files.FileUtils;
 import com.max2idea.android.limbo.main.Config;
 import com.max2idea.android.limbo.main.LimboActivity;
+import com.max2idea.android.limbo.main.LimboApplication;
 import com.max2idea.android.limbo.main.LimboSettingsManager;
 import com.max2idea.android.limbo.network.NetworkUtils;
 import com.max2idea.android.limbo.toast.ToastUtils;
@@ -129,6 +130,11 @@ public class MachineService extends Service {
         // at the moment of the crash, so we can resolve backtrace PCs offline.
         // Do this in a normal thread (logcat is safe here, unlike in a signal handler).
         dumpMapsToLogcat();
+        // QEMU uses libSDL2 (display + the sdl audio backend) and SDL needs its
+        // Java side registered before any native SDL call. In VNC mode that
+        // registration never happened (no SDL activity is started), which used
+        // to kill the process silently as soon as QEMU touched SDL.
+        LimboApplication.prepareSdlBridge();
         setupLocks();
 
         // notify we started
