@@ -432,9 +432,13 @@ private String getQemuLibrary() {
 
         if (cpu != null && !cpu.equals("Default")) {
             // Plus feature: AVX enablement + use "max" CPU for best TCG
-            // performance on x86_64 guests
+            // performance on x86_64 guests.
+            //
+            // NOTE: QEMU drops the AVX bits when TCG runs multi-threaded (Limbo
+            // Plus hit the same limitation and renamed this option "ISA
+            // optimization"), so only ask for them when MTTCG is off.
             if (LimboApplication.arch == Config.Arch.x86_64) {
-                if (Config.enableAVX) {
+                if (Config.enableAVX && getMachine().getEnableMTTCG() == 0) {
                     cpu += ",+avx,+xsave,+xsaveopt,+f16c";
                 }
             }
@@ -557,10 +561,18 @@ private String getQemuLibrary() {
             }
             br.close();
             long availMiB = availKb / 1024;
-            if (availMiB >= 2048) {
-                sAutoTbSizeMiB = 256;
+            // QEMU's own default is MIN(1 GiB, guest_ram / 8), i.e.128 MiB for
+            // the usual1 GiB guest. Limbo Plus simply pins the TCG cache to
+            // 4 GiB; because the code buffer is only committed as translated
+            // code is written into it, a much larger cache mainly means far
+            // fewer retranslations (the biggest single TCG speed-up). Size it
+            // from the memory the phone can actually spare.
+            if (availMiB >= 4096) {
+                sAutoTbSizeMiB = 1024;
+            } else if (availMiB >= 2048) {
+                sAutoTbSizeMiB = 512;
             } else if (availMiB >= 1024) {
-                sAutoTbSizeMiB = 128;
+                sAutoTbSizeMiB = 256;
             }
             Log.d(TAG, "Auto TB cache: " + sAutoTbSizeMiB + " MiB (free " + availMiB + " MiB)");
         } catch (Throwable t) {
