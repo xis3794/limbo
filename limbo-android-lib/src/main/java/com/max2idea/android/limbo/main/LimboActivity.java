@@ -210,6 +210,8 @@ public class LimboActivity extends AppCompatActivity
     private HomeController homeController;
     private boolean homeMode;
     private String pendingMachineName;
+    /** Non-null while the configuration page is still loading the machine from the intent. */
+    private String loadingMachineName;
 
     // Glass UI
     private GlassBlurView mToolbarGlass;
@@ -245,8 +247,9 @@ public class LimboActivity extends AppCompatActivity
                         // so they have to change it from within the SDL Activity
                         enableRemovableDiskValues(true);
                     } else {
-                        // SDL is always suspend in the background
-                        mStatusText.setText(R.string.Suspended);
+                        // The SDL surface is suspended while this page is open, but
+                        // the machine itself is running.
+                        mStatusText.setText(R.string.Running);
                         enableRemovableDiskValues(false);
                     }
                     unlockRemovableDevices(false);
@@ -1036,8 +1039,15 @@ public class LimboActivity extends AppCompatActivity
         setContentView(R.layout.limbo_main);
         setupWidgets();
         setupController();
+        // Register the model listeners before the machine load is requested so the
+        // MachineLoaded event can never get lost.
+        setupListeners();
         setupDiskMapping();
         createListeners();
+        prepareConfigMachine();
+        if (isFinishing()) {
+            return;
+        }
         populateAttributesUI();
         checkFirstLaunch();
         setupToolbar();
@@ -1046,7 +1056,6 @@ public class LimboActivity extends AppCompatActivity
         checkLog();
         checkAndLoadLibs();
         restore();
-        setupListeners();
         addGenericOperatingSystems();
     }
 
@@ -1073,6 +1082,11 @@ public class LimboActivity extends AppCompatActivity
     }
 
     private void restore() {
+        if (pendingMachineName != null) {
+            // The user explicitly opened a machine configuration; never override it
+            // with whatever machine happens to be running.
+            return;
+        }
         new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -1140,13 +1154,23 @@ public class LimboActivity extends AppCompatActivity
                 if (position == 0) {
                     enableNonRemovableDeviceOptions(false);
                     enableRemovableDeviceOptions(false);
-                    if (!MachineController.getInstance().isRunning())
+                    // While the initial machine is still loading the spinner is being
+                    // populated and fires a transient "None" selection - ignore it.
+                    if (!MachineController.getInstance().isRunning()
+                            && loadingMachineName == null)
                         notifyAction(MachineAction.LOAD_VM, null);
                 } else if (position == 1) {
                     mMachine.setSelection(0);
                     promptMachineName(LimboActivity.this);
                 } else {
                     final String machine = (String) ((ArrayAdapter<?>) mMachine.getAdapter()).getItem(position);
+                    // The machine requested from the intent is already being loaded.
+                    if (loadingMachineName != null && loadingMachineName.equals(machine))
+                        return;
+                    Machine loaded = MachineController.getInstance().getMachine();
+                    // Repopulating the adapter re-selects the active machine: no reload.
+                    if (loaded != null && machine.equals(loaded.getName()))
+                        return;
                     setUserPressed(false);
                     machineLoaded = true;
                     notifyAction(MachineAction.LOAD_VM, machine);
@@ -1237,11 +1261,19 @@ public class LimboActivity extends AppCompatActivity
     private void checkLog() {
         Thread t = new Thread(new Runnable() {
             public void run() {
+                // While the VM is alive the stored exit code is intentionally
+                // EXIT_UNKNOWN (it is only finalized when QEMU exits). Prompting here
+                // made every tap on a machine card in the home screen show the crash
+                // log dialog again.
+                if (MachineController.getInstance().isRunning())
+                    return;
                 if (LimboSettingsManager.getExitCode(LimboActivity.this) != Config.EXIT_SUCCESS) {
-                    if (MachineController.getInstance().isRunning())
-                        LimboSettingsManager.setExitCode(LimboActivity.this, Config.EXIT_UNKNOWN);
-                    else
-                        LimboSettingsManager.setExitCode(LimboActivity.this, Config.EXIT_SUCCESS);
+                    LimboSettingsManager.setExitCode(LimboActivity.this, Config.EXIT_SUCCESS);
+                    // Starting a machine straight from its card should not be
+                    // interrupted by a modal dialog; the log is still available from
+                    // the menu/settings.
+                    if (pendingAutoStart)
+                        return;
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -1401,8 +1433,132 @@ public class LimboActivity extends AppCompatActivity
         }
     }
 
+    /**
+     * Configuration pages always open for a concrete machine. Load it before the
+     * first frame is drawn instead of waiting for the background spinner population,
+     * otherwise the page briefly shows the default (empty) configuration.
+     */
+    private void prepareConfigMachine() {
+        if (pendingMachineName == null) {
+            return;
+        }
+        Machine stored = MachineController.getInstance().getMachineConfig(pendingMachineName);
+        if (stored == null) {
+            pendingMachineName = null;
+            pendingAutoStart = false;
+            ToastUtils.toastShort(this, getString(R.string.machine_not_found));
+            finish();
+            return;
+        }
+        loadingMachineName = pendingMachineName;
+        populateMachinesSync();
+        showConfigLoading(true);
+        notifyAction(MachineAction.LOAD_VM, loadingMachineName);
+        // Failsafe: never leave the page hidden if the model never answers.
+        if (mScrollView != null) {
+            mScrollView.postDelayed(new Runnable() {
+                public void run() {
+                    if (loadingMachineName != null) {
+                        loadingMachineName = null;
+                        hideConfigLoading();
+                    }
+                }
+            }, 6000);
+        }
+    }
+
+    private void populateMachinesSync() {
+        ArrayList<String> machinesList = ArchDefinitions.getMachineValues(this);
+        machinesList.addAll(MachineController.getInstance().getStoredMachines());
+        ArrayAdapter<String> machineAdapter = new ArrayAdapter<>(this,
+                R.layout.custom_spinner_item, machinesList);
+        machineAdapter.setDropDownViewResource(R.layout.custom_spinner_dropdown_item);
+        mMachine.setAdapter(machineAdapter);
+        mMachine.invalidate();
+        String target = pendingMachineName;
+        if (target == null && MachineController.getInstance().getMachine() != null) {
+            target = MachineController.getInstance().getMachine().getName();
+        }
+        if (target != null) {
+            SpinnerAdapter.setDiskAdapterValue(mMachine, target);
+        }
+    }
+
+    private void showConfigLoading(boolean show) {
+        if (mScrollView == null) {
+            return;
+        }
+        View loading = findViewById(R.id.config_loading);
+        if (loading == null) {
+            return;
+        }
+        loading.animate().cancel();
+        if (show) {
+            loading.setAlpha(1f);
+            loading.setVisibility(View.VISIBLE);
+            mScrollView.setAlpha(0f);
+        }
+    }
+
+    private void hideConfigLoading() {
+        if (mScrollView == null) {
+            return;
+        }
+        final View loading = findViewById(R.id.config_loading);
+        if (loading != null) {
+            loading.animate().cancel();
+            loading.animate().alpha(0f).setDuration(180).withEndAction(new Runnable() {
+                public void run() {
+                    View current = findViewById(R.id.config_loading);
+                    if (current != null) {
+                        current.setVisibility(View.GONE);
+                    }
+                }
+            }).start();
+        }
+        mScrollView.animate().cancel();
+        mScrollView.setAlpha(0f);
+        mScrollView.animate().alpha(1f).setDuration(240).start();
+        refreshGlassLater(320);
+    }
+
+    private String getDriveValue(FileType fileType) {
+        Machine machine = getMachine();
+        if (machine == null) {
+            return null;
+        }
+        switch (fileType) {
+            case CDROM:
+                return machine.getCdImagePath();
+            case FDA:
+                return machine.getFdaImagePath();
+            case FDB:
+                return machine.getFdbImagePath();
+            case SD:
+                return machine.getSdImagePath();
+            case HDA:
+                return machine.getHdaImagePath();
+            case HDB:
+                return machine.getHdbImagePath();
+            case HDC:
+                return machine.getHdcImagePath();
+            case HDD:
+                return machine.getHddImagePath();
+            case SHARED_DIR:
+                return machine.getSharedFolderPath();
+            case KERNEL:
+                return machine.getKernel();
+            case INITRD:
+                return machine.getInitRd();
+            default:
+                return null;
+        }
+    }
+
     private void populateAttributesUI() {
-        populateMachines(null);
+        if (loadingMachineName == null) {
+            populateMachines(null);
+        }
         populateMachineType(null);
         populateCPUs(null);
         populateCPUNum();
@@ -2142,7 +2298,8 @@ public class LimboActivity extends AppCompatActivity
         mStatus.setColorFilter(color);
 
         if (mStatusPill != null) {
-            mStatusPill.setText(mStatusText.getText());
+            boolean sdl = mUI == null || mUI.getSelectedItemPosition() != 0;
+            mStatusPill.setText(sdl ? "SDL" : "VNC");
             mStatusPill.setTextColor(running
                     ? color : ContextCompat.getColor(this, R.color.limbo_text_dim));
             mStatusPill.setBackgroundResource(running
@@ -2151,8 +2308,11 @@ public class LimboActivity extends AppCompatActivity
 
         if (mStatusDetail != null) {
             final Machine machine = getMachine();
-            final String detail = machine != null && machine.getName() != null
+            String detail = machine != null && machine.getName() != null
                     ? machine.getName() : getString(R.string.appSubtitle);
+            if (running && (mUI == null || mUI.getSelectedItemPosition() != 0)) {
+                detail = detail + " · " + getString(R.string.status_sdl_background);
+            }
             mStatusDetail.setText(detail);
         }
     }
@@ -2490,20 +2650,27 @@ public class LimboActivity extends AppCompatActivity
     }
 
     private void loadMachine() {
-
-        setUserPressed(false);
-        if (getMachine() == null) {
-            return;
-        }
+        // Called from the model dispatcher: everything that touches views has to
+        // happen on the UI thread.
         new Handler(Looper.getMainLooper()).post(new Runnable() {
             public void run() {
+                setUserPressed(false);
+                if (getMachine() == null) {
+                    loadingMachineName = null;
+                    changeStatus(MachineStatus.Ready);
+                    hideConfigLoading();
+                    return;
+                }
                 loadMachineUI();
-                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                // Apply the machine values in the same frame: the previous 1s delay
+                // made the sliders/header/checkboxes show the defaults for a moment.
+                new Handler(Looper.getMainLooper()).post(new Runnable() {
                     @Override
                     public void run() {
                         postLoadMachineUI();
+                        hideConfigLoading();
                     }
-                }, 1000);
+                });
                 setCPUOptions();
                 getMachine().addObserver(LimboActivity.this);
             }
@@ -2511,6 +2678,13 @@ public class LimboActivity extends AppCompatActivity
     }
 
     private void postLoadMachineUI() {
+
+        if (getMachine() == null) {
+            loadingMachineName = null;
+            hideConfigLoading();
+            return;
+        }
+        loadingMachineName = null;
 
         mFDAenable.setChecked(getMachine().getFdaImagePath() != null);
         mFDBenable.setChecked(getMachine().getFdbImagePath() != null);
@@ -2935,7 +3109,10 @@ public class LimboActivity extends AppCompatActivity
         }
         savePendingEditText();
         MachineController.getInstance().removeOnStatusChangeListener(this);
-        getMachine().deleteObserver(LimboActivity.this);
+        MachineController.getInstance().removeOnEventListener(this);
+        if (getMachine() != null) {
+            getMachine().deleteObserver(LimboActivity.this);
+        }
         setViewListener(null);
         super.onDestroy();
     }
@@ -3132,6 +3309,11 @@ private void populateFirmware() {
                         adapter.setDropDownViewResource(R.layout.custom_spinner_dropdown_item);
                         spinner.setAdapter(adapter);
                         spinner.invalidate();
+                        // The adapter may have been built after the machine was
+                        // loaded; re-apply its drive so the value is never lost.
+                        if (getMachine() != null) {
+                            seMachineDriveValue(fileType, getDriveValue(fileType));
+                        }
                     }
                 });
             }

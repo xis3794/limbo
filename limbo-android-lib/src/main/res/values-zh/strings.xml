@@ -508,4 +508,17 @@
     <string name="section_audio">"音频"</string>
     <string name="section_updates">"更新"</string>
     <string name="fullscreen_summary">"以全屏方式显示虚拟机画面"</string>
+
+    <string name="loading_config">"正在载入配置…"</string>
+    <string name="machine_not_found">"虚拟机不存在"</string>
+    <string name="screen_paused">"已挂起"</string>
+    <string name="screen_discard">"丢弃状态"</string>
+    <string name="screen_stopping">"正在停止…"</string>
+    <string name="view_log_action">"查看日志"</string>
+    <string name="dialog_stop_title">"停止虚拟机"</string>
+    <string name="dialog_force_stop_title">"虚拟机没有响应"</string>
+    <string name="dialog_force_stop_message">"关机请求没有完成。强制结束应用会立即停止虚拟机，未保存的磁盘数据可能丢失。是否继续？"</string>
+    <string name="force_close">"强制结束"</string>
+    <string name="keep_waiting">"继续等待"</string>
+    <string name="status_sdl_background">"画面在后台运行"</string>
 </resources>

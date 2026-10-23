@@ -122,6 +122,17 @@ public class MachineController {
         machineExecutor.stopvm(0);
     }
 
+    /**
+     * Direct stop request used by the UI when the action dispatcher might still be
+     * busy. VMExecutor.stopvm() only posts a shutdown request to QEMU, so it is
+     * safe to call from any thread.
+     */
+    public void requestStop() {
+        if (getCurrStatus() == MachineStatus.Running) {
+            machineExecutor.stopvm(0);
+        }
+    }
+
     private void notifyMachineStatusChangeListeners(Machine machine, MachineStatus status, Object o) {
         for (OnMachineStatusChangeListener listener : onMachineStatusChangeListeners)
             listener.onMachineStatusChanged(machine, status, o);

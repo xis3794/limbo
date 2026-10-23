@@ -65,6 +65,7 @@ import com.max2idea.android.limbo.machine.MachineController;
 import com.max2idea.android.limbo.machine.MachineProperty;
 import com.max2idea.android.limbo.screen.ScreenUtils;
 import com.max2idea.android.limbo.toast.ToastUtils;
+import com.max2idea.android.limbo.ui.UiDialogs;
 
 import org.libsdl.app.SDLActivity;
 import org.libsdl.app.SDLAudioManager;
@@ -87,6 +88,8 @@ public class LimboSDLActivity extends SDLActivity
     public static boolean isResizing = false;
     public static boolean pendingPause;
     public static boolean pendingStop;
+    /** Stop was confirmed on the home dashboard; execute it without asking again. */
+    public static boolean pendingStopImmediate;
     private static boolean machineRunning;
 
     public static MouseMode mouseMode = MouseMode.Trackpad;
@@ -654,6 +657,51 @@ public class LimboSDLActivity extends SDLActivity
             notifyAction(MachineAction.UPDATE_NOTIFICATION,
                     getString(R.string.VMRunning));
         super.onResume();
+        if (pendingStopImmediate) {
+            pendingStopImmediate = false;
+            // Give the surface a moment to come back before talking to QEMU.
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    stopVmFromHome();
+                }
+            }, 1200);
+        }
+    }
+
+    /**
+     * Shutdown requested from the home dashboard. The SDL surface is in the
+     * foreground again, so QEMU can process the host shutdown request that the
+     * backgrounded display thread might otherwise have blocked.
+     */
+    private void stopVmFromHome() {
+        if (!MachineController.getInstance().isRunning()) {
+            return;
+        }
+        ToastUtils.toastShort(this, getString(R.string.screen_stopping));
+        MachineController.getInstance().requestStop();
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (MachineController.getInstance().isRunning()) {
+                    promptForceClose();
+                }
+            }
+        }, 12000);
+    }
+
+    private void promptForceClose() {
+        UiDialogs.prompt(this,
+                getString(R.string.dialog_force_stop_title),
+                getString(R.string.dialog_force_stop_message),
+                getString(R.string.keep_waiting),
+                getString(R.string.force_close),
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        android.os.Process.killProcess(android.os.Process.myPid());
+                    }
+                });
     }
 
     public void loadLibraries() {

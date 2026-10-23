@@ -38,6 +38,7 @@ import com.max2idea.android.limbo.dialog.DialogUtils;
 import com.max2idea.android.limbo.main.LimboApplication;
 import com.max2idea.android.limbo.main.LimboFileManager;
 import com.max2idea.android.limbo.files.FileUtils;
+import com.max2idea.android.limbo.ui.UiDialogs;
 import com.max2idea.android.limbo.machine.Machine.FileType;
 import com.max2idea.android.limbo.main.Config;
 import com.max2idea.android.limbo.toast.ToastUtils;
@@ -98,29 +99,17 @@ public class Logger {
     }
 
     public static void promptShowLog(final Activity activity) {
-
-        final AlertDialog alertDialog;
-        alertDialog = new AlertDialog.Builder(activity).create();
-        alertDialog.setTitle(activity.getString(R.string.ShowLog));
-        TextView stateView = new TextView(activity);
-        stateView.setText(R.string.LogWarning);
-        stateView.setPadding(20, 20, 20, 20);
-        alertDialog.setView(stateView);
-
-        // alertDialog.setMessage(body);
-        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, activity.getString(R.string.Yes),
-                new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int which) {
-
+        UiDialogs.prompt(activity,
+                activity.getString(R.string.ShowLog),
+                activity.getString(R.string.LogWarning),
+                activity.getString(R.string.Cancel),
+                activity.getString(R.string.view_log_action),
+                new Runnable() {
+                    @Override
+                    public void run() {
                         viewLimboLog(activity);
                     }
                 });
-        alertDialog.setButton(DialogInterface.BUTTON_NEGATIVE, activity.getString(R.string.Cancel),
-                new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int which) {
-                    }
-                });
-        alertDialog.show();
     }
 
     public static void UIAlertLog(final Activity activity, String title, Spannable body) {

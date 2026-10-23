@@ -507,4 +507,17 @@
     <string name="section_audio">"Audio"</string>
     <string name="section_updates">"Updates"</string>
     <string name="fullscreen_summary">"Show the virtual machine in fullscreen"</string>
+
+    <string name="loading_config">"Loading configuration…"</string>
+    <string name="machine_not_found">"Machine not found"</string>
+    <string name="screen_paused">"Paused"</string>
+    <string name="screen_discard">"Discard state"</string>
+    <string name="screen_stopping">"Stopping…"</string>
+    <string name="view_log_action">"View log"</string>
+    <string name="dialog_stop_title">"Stop virtual machine"</string>
+    <string name="dialog_force_stop_title">"Virtual machine is not responding"</string>
+    <string name="dialog_force_stop_message">"The shutdown request did not complete. Force closing the app stops the virtual machine immediately; unsaved disk data may be lost. Continue?"</string>
+    <string name="force_close">"Force close"</string>
+    <string name="keep_waiting">"Keep waiting"</string>
+    <string name="status_sdl_background">"display in background"</string>
 </resources>

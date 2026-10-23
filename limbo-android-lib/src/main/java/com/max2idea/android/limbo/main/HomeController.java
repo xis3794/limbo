@@ -29,8 +29,10 @@ import com.max2idea.android.limbo.log.Logger;
 import com.max2idea.android.limbo.machine.Machine;
 import com.max2idea.android.limbo.machine.MachineAction;
 import com.max2idea.android.limbo.machine.MachineController;
+import com.max2idea.android.limbo.machine.MachineProperty;
 import com.max2idea.android.limbo.ui.AppBackgroundView;
 import com.max2idea.android.limbo.ui.GlassBlurView;
+import com.max2idea.android.limbo.ui.UiDialogs;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -288,14 +290,87 @@ public class HomeController implements
         screenStop.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                new AlertDialog.Builder(activity)
-                        .setMessage(R.string.stop_vm_confirm)
-                        .setPositiveButton(R.string.screen_stop, (dialog, which) ->
-                                LimboApplication.getViewListener().onAction(MachineAction.STOP_VM, null))
-                        .setNegativeButton(R.string.cancel, null)
-                        .show();
+                promptStopMachine();
             }
         });
+    }
+
+    private boolean isMachinePaused() {
+        Machine machine = MachineController.getInstance().getMachine();
+        return !MachineController.getInstance().isRunning()
+                && machine != null && machine.getPaused() == 1;
+    }
+
+    private void promptStopMachine() {
+        final MachineController controller = MachineController.getInstance();
+        final boolean running = controller.isRunning();
+        final boolean paused = isMachinePaused();
+        if (!running && !paused) {
+            Toast.makeText(activity, R.string.vmNotRunning, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (paused) {
+            UiDialogs.prompt(activity,
+                    activity.getString(R.string.discardVMState),
+                    activity.getString(R.string.discardVMInstructions),
+                    activity.getString(R.string.cancel),
+                    activity.getString(R.string.screen_discard),
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            LimboApplication.getViewListener().onFieldChange(MachineProperty.PAUSED, 0);
+                            delayedScreenRefresh(600);
+                        }
+                    });
+            return;
+        }
+        final boolean sdl = !controller.isVNCEnabled();
+        UiDialogs.prompt(activity,
+                activity.getString(R.string.dialog_stop_title),
+                activity.getString(R.string.ShutdownVMWarning),
+                activity.getString(R.string.cancel),
+                activity.getString(R.string.screen_stop),
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        stopRunningMachine(sdl);
+                    }
+                });
+    }
+
+    private void stopRunningMachine(boolean sdl) {
+        Toast.makeText(activity, R.string.screen_stopping, Toast.LENGTH_SHORT).show();
+        // Try the direct shutdown request first: it is handled as soon as the QEMU
+        // main loop wakes up.
+        MachineController.getInstance().requestStop();
+        if (!sdl) {
+            return;
+        }
+        // In SDL mode QEMU renders through the SDL surface; while that surface is
+        // in the background the display thread can block the QEMU main loop, so the
+        // request above may never be processed. Bring the surface back and issue
+        // the stop from the SDL activity in that case.
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (activity.isFinishing() || activity.isDestroyed()) {
+                    return;
+                }
+                if (MachineController.getInstance().isRunning()) {
+                    LimboSDLActivity.pendingStopImmediate = true;
+                    activity.startActivity(new Intent(activity, LimboSDLActivity.class));
+                }
+            }
+        }, 4000);
+    }
+
+    private void delayedScreenRefresh(long delay) {
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                refreshScreen();
+            }
+        }, delay);
     }
 
     public void onResume() {
@@ -438,13 +513,22 @@ public class HomeController implements
     private void refreshScreen() {
         final boolean running = MachineController.getInstance().isRunning();
         Machine machine = MachineController.getInstance().getMachine();
+        final boolean paused = !running && machine != null && machine.getPaused() == 1;
         String name = machine != null ? machine.getName() : null;
 
-        screenState.setText(running ? R.string.screen_running : R.string.screen_not_running);
-        screenState.setTextColor(ContextCompat.getColor(activity,
-                running ? R.color.limbo_success : R.color.limbo_text_dim));
-        screenDot.setBackgroundResource(running
-                ? R.drawable.bg_status_dot : R.drawable.bg_status_dot_off);
+        if (running) {
+            screenState.setText(R.string.screen_running);
+            screenState.setTextColor(ContextCompat.getColor(activity, R.color.limbo_success));
+            screenDot.setBackgroundResource(R.drawable.bg_status_dot);
+        } else if (paused) {
+            screenState.setText(R.string.screen_paused);
+            screenState.setTextColor(ContextCompat.getColor(activity, R.color.limbo_warning));
+            screenDot.setBackgroundResource(R.drawable.bg_status_dot_paused);
+        } else {
+            screenState.setText(R.string.screen_not_running);
+            screenState.setTextColor(ContextCompat.getColor(activity, R.color.limbo_text_dim));
+            screenDot.setBackgroundResource(R.drawable.bg_status_dot_off);
+        }
 
         if (name == null) {
             screenMachine.setText(R.string.screen_no_machine);
@@ -467,8 +551,12 @@ public class HomeController implements
         boolean sdl = running && (machine == null || machine.getEnableVNC() != 1);
         screenEnter.setEnabled(sdl);
         screenEnter.setAlpha(sdl ? 1f : 0.5f);
-        screenStop.setEnabled(running);
-        screenStop.setAlpha(running ? 1f : 0.5f);
+        screenStop.setEnabled(running || paused);
+        screenStop.setAlpha(running || paused ? 1f : 0.5f);
+        if (screenStop instanceof android.widget.Button) {
+            ((android.widget.Button) screenStop).setText(paused
+                    ? R.string.screen_discard : R.string.screen_stop);
+        }
     }
 
     private void openConfig(String machineName) {
@@ -476,6 +564,12 @@ public class HomeController implements
     }
 
     private void openConfig(String machineName, boolean start) {
+        MachineController controller = MachineController.getInstance();
+        if (controller.isRunning()
+                && !machineName.equals(controller.getMachineName())) {
+            Toast.makeText(activity, R.string.stop_first, Toast.LENGTH_SHORT).show();
+            return;
+        }
         Intent intent = new Intent(activity, activity.getClass());
         intent.putExtra(LimboActivity.EXTRA_MACHINE, machineName);
         intent.putExtra(LimboActivity.EXTRA_START, start);
