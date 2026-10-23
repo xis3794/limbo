@@ -67,6 +67,8 @@ public final class UiDialogs {
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             int width = activity.getResources().getDisplayMetrics().widthPixels - dp(activity, 40);
+            // Keep the card readable on tablets/landscape (M3 max width).
+            width = Math.min(width, dp(activity, 480));
             window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
             WindowManager.LayoutParams lp = window.getAttributes();
             lp.dimAmount = 0.45f;
