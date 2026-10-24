@@ -213,6 +213,10 @@ public class LimboActivity extends AppCompatActivity
     private String pendingMachineName;
     /** Non-null while the configuration page is still loading the machine from the intent. */
     private String loadingMachineName;
+    /** Keeps the drive/settings listeners disabled until all async disk adapters settled. */
+    private int pendingDiskAdapters;
+    private boolean machineHydrated;
+    private boolean listenersEnabled;
 
     // Glass UI
     private GlassBlurView mToolbarGlass;
@@ -290,6 +294,7 @@ public class LimboActivity extends AppCompatActivity
     }
 
     public void setUserPressed(boolean pressed) {
+        listenersEnabled = pressed;
         if (pressed) {
             setupMiscOptions();
             setupNonRemovableDiskListeners();
@@ -297,6 +302,18 @@ public class LimboActivity extends AppCompatActivity
         } else {
             disableListeners();
             disableRemovableDiskListeners();
+        }
+    }
+
+    /**
+     * Disk adapters are rebuilt on background threads and replacing an adapter resets
+     * the spinner selection. If the change listeners are attached at that moment the
+     * synthetic "None" selection is written back to the machine and wipes its disk
+     * paths. Only re-enable editing once every adapter has settled.
+     */
+    private void maybeEnableEditors() {
+        if (pendingDiskAdapters == 0 && machineHydrated && !listenersEnabled) {
+            setUserPressed(true);
         }
     }
 
@@ -1340,6 +1357,33 @@ public class LimboActivity extends AppCompatActivity
     public void setupNativeLibs() {
         if (libLoaded)
             return;
+        // A downloadable QEMU build takes precedence over the bundled one. Its
+        // libraries must be mapped before any APK glib/SDL copy is loaded.
+        try {
+            com.max2idea.android.limbo.qemu.QemuVersion active =
+                    com.max2idea.android.limbo.qemu.QemuVersionManager.getActive(this);
+            if (active != null && !active.isBuiltin()) {
+                try {
+                    loadExternalQemuVersion(active);
+                    libLoaded = true;
+                    return;
+                } catch (Throwable t) {
+                    logNative("external QEMU failed: " + t);
+                    com.max2idea.android.limbo.qemu.QemuVersionManager.setActive(this,
+                            com.max2idea.android.limbo.qemu.QemuVersion.BUILTIN_ID);
+                    try {
+                        ToastUtils.toastLong(this, getString(R.string.qemu_load_failed));
+                        Thread.sleep(900);
+                    } catch (Exception ignored) {
+                    }
+                    // libs may be half-mapped: a clean process restart is the only
+                    // safe way back to the bundled build.
+                    android.os.Process.killProcess(android.os.Process.myPid());
+                    return;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
         try {
             //Compatibility lib
             logNative("loading compat-limbo");
@@ -1390,6 +1434,39 @@ public class LimboActivity extends AppCompatActivity
         loadQEMULib();
 
         libLoaded = true;
+    }
+
+    /**
+     * Maps an installed QEMU build from app storage. Only works when the installed
+     * APK targets API <= 28 (W^X/linker namespace restriction on newer targets).
+     */
+    private void loadExternalQemuVersion(com.max2idea.android.limbo.qemu.QemuVersion version)
+            throws Throwable {
+        logNative("loading external QEMU " + version.version + " from " + version.dir);
+        System.loadLibrary("compat-limbo");
+        System.loadLibrary("compat-musl");
+        java.io.File libDir = version.libDir();
+        if (libDir == null || !libDir.isDirectory()) {
+            throw new java.io.IOException("version directory missing");
+        }
+        for (String name : version.loadOrder) {
+            if (name.equals(version.qemuLib)) {
+                continue;
+            }
+            java.io.File lib = new java.io.File(libDir, name);
+            if (lib.isFile()) {
+                System.load(lib.getAbsolutePath());
+                logNative("OK " + name);
+            }
+        }
+        java.io.File qemu = new java.io.File(libDir, version.qemuLib);
+        if (!qemu.isFile()) {
+            throw new java.io.IOException("qemu library missing: " + qemu);
+        }
+        System.load(qemu.getAbsolutePath());
+        logNative("OK " + version.qemuLib);
+        System.loadLibrary("limbo");
+        logNative("OK limbo");
     }
 
     protected void loadQEMULib() {
@@ -1797,7 +1874,7 @@ public class LimboActivity extends AppCompatActivity
     // Retrives values from saved preferences
     private void onStartButton() {
 
-        if (mMachine.getSelectedItemPosition() == 0 || getMachine() == null) {
+        if (getMachine() == null) {
             ToastUtils.toastShort(LimboActivity.this, getString(R.string.SelectOrCreateVirtualMachineFirst));
             return;
         }
@@ -2710,7 +2787,16 @@ public class LimboActivity extends AppCompatActivity
             enableNonRemovableDeviceOptions(true);
             enableRemovableDeviceOptions(true);
         }
-        setUserPressed(true);
+        machineHydrated = true;
+        maybeEnableEditors();
+        if (!listenersEnabled && mScrollView != null) {
+            // Failsafe if an adapter thread never reports back.
+            mScrollView.postDelayed(new Runnable() {
+                public void run() {
+                    maybeEnableEditors();
+                }
+            }, 2500);
+        }
         machineLoaded = false;
         syncSlidersFromMachine();
         updateMachineHeader();
@@ -3298,6 +3384,10 @@ private void populateFirmware() {
     }
 
     public void populateDiskAdapter(final Spinner spinner, final FileType fileType, final boolean createOption) {
+        pendingDiskAdapters++;
+        if (listenersEnabled) {
+            setUserPressed(false);
+        }
         Thread t = new Thread(new Runnable() {
             public void run() {
                 ArrayList<String> oldHDs = MachineFilePaths.getRecentFilePaths(fileType);
@@ -3325,6 +3415,8 @@ private void populateFirmware() {
                         if (getMachine() != null) {
                             seMachineDriveValue(fileType, getDriveValue(fileType));
                         }
+                        pendingDiskAdapters--;
+                        maybeEnableEditors();
                     }
                 });
             }

@@ -546,4 +546,32 @@
     <string name="vnc_send">"Send"</string>
     <string name="vnc_key_prompt">"Text to send"</string>
     <string name="vnc_open">"Open VNC client"</string>
+
+    <string name="section_qemu">"QEMU"</string>
+    <string name="qemu_versions">"Version manager"</string>
+    <string name="qemu_versions_sub">"Install, switch and remove QEMU builds"</string>
+    <string name="qemu_active_version">"Active version"</string>
+    <string name="qemu_restart_note">"Switching builds restarts the app"</string>
+    <string name="qemu_installed">"Installed"</string>
+    <string name="qemu_available">"Downloadable"</string>
+    <string name="qemu_install_from_file">"Install from file (.tar.xz)"</string>
+    <string name="qemu_use">"Use"</string>
+    <string name="qemu_active">"Active"</string>
+    <string name="qemu_delete">"Delete"</string>
+    <string name="qemu_builtin">"Built-in"</string>
+    <string name="qemu_delete_confirm">"Delete this QEMU build?"</string>
+    <string name="qemu_switch_confirm">"Switch to %1$s? The app will restart."</string>
+    <string name="qemu_catalog_loading">"Loading version list…"</string>
+    <string name="qemu_catalog_failed">"Could not load the version list: %1$s"</string>
+    <string name="qemu_download">"Download &amp; install"</string>
+    <string name="qemu_not_published">"Not published yet"</string>
+    <string name="qemu_installing">"Installing…"</string>
+    <string name="qemu_downloading">"Downloading…"</string>
+    <string name="qemu_install_failed">"Install failed: %1$s"</string>
+    <string name="qemu_install_done">"Installed %1$s"</string>
+    <string name="qemu_load_failed">"The selected QEMU build could not be loaded. The built-in one is used now."</string>
+    <string name="qemu_stop_first">"Stop the running virtual machine first"</string>
+    <string name="qemu_no_packages">"No downloadable builds published yet"</string>
+    <string name="qemu_retry">"Retry"</string>
+    <string name="qemu_installed_badge">"Installed"</string>
 </resources>

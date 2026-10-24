@@ -547,4 +547,32 @@
     <string name="vnc_send">"发送"</string>
     <string name="vnc_key_prompt">"要发送的文字"</string>
     <string name="vnc_open">"打开 VNC 客户端"</string>
+
+    <string name="section_qemu">"QEMU"</string>
+    <string name="qemu_versions">"版本管理"</string>
+    <string name="qemu_versions_sub">"安装、切换和删除 QEMU 版本"</string>
+    <string name="qemu_active_version">"当前版本"</string>
+    <string name="qemu_restart_note">"切换版本后应用会自动重启"</string>
+    <string name="qemu_installed">"已安装"</string>
+    <string name="qemu_available">"可下载"</string>
+    <string name="qemu_install_from_file">"从文件安装（.tar.xz）"</string>
+    <string name="qemu_use">"使用"</string>
+    <string name="qemu_active">"使用中"</string>
+    <string name="qemu_delete">"删除"</string>
+    <string name="qemu_builtin">"内置"</string>
+    <string name="qemu_delete_confirm">"删除这个 QEMU 版本？"</string>
+    <string name="qemu_switch_confirm">"切换到 %1$s？应用将重启。"</string>
+    <string name="qemu_catalog_loading">"正在获取版本列表…"</string>
+    <string name="qemu_catalog_failed">"获取版本列表失败：%1$s"</string>
+    <string name="qemu_download">"下载安装"</string>
+    <string name="qemu_not_published">"尚未发布"</string>
+    <string name="qemu_installing">"正在安装…"</string>
+    <string name="qemu_downloading">"正在下载…"</string>
+    <string name="qemu_install_failed">"安装失败：%1$s"</string>
+    <string name="qemu_install_done">"已安装 %1$s"</string>
+    <string name="qemu_load_failed">"所选 QEMU 版本加载失败，已切回内置版本"</string>
+    <string name="qemu_stop_first">"请先停止正在运行的虚拟机"</string>
+    <string name="qemu_no_packages">"暂无已发布的版本"</string>
+    <string name="qemu_retry">"重试"</string>
+    <string name="qemu_installed_badge">"已安装"</string>
 </resources>

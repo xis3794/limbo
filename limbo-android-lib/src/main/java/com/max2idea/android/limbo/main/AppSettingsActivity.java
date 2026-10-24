@@ -1,5 +1,6 @@
 package com.max2idea.android.limbo.main;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.graphics.Typeface;
@@ -27,6 +28,7 @@ import androidx.core.content.ContextCompat;
 
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.limbo.emu.lib.R;
+import com.max2idea.android.limbo.qemu.QemuVersionManager;
 import com.max2idea.android.limbo.ui.AppBackgroundView;
 import com.max2idea.android.limbo.ui.SteplessSlider;
 
@@ -48,6 +50,7 @@ public class AppSettingsActivity extends AppCompatActivity {
     private int textColor;
     private int accentColor;
     private TextView vncPasswordValue;
+    private ValueRow qemuVersionRow;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,6 +85,14 @@ public class AppSettingsActivity extends AppCompatActivity {
         buildUi();
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (qemuVersionRow != null) {
+            qemuVersionRow.value.setText(QemuVersionManager.getActive(this).displayName);
+        }
+    }
+
     private void buildUi() {
         final Resources res = getResources();
 
@@ -90,6 +101,18 @@ public class AppSettingsActivity extends AppCompatActivity {
         addSwitch(files, R.drawable.ic_folder,
                 R.string.EnableLegacyFileManager, R.string.EnableLegacyFileManagerSummary,
                 "EnableLegacyFileManager", false, null);
+
+        // QEMU builds
+        LinearLayout qemu = addSection(R.string.section_qemu);
+        qemuVersionRow = addValue(qemu, R.drawable.ic_machine_box,
+                R.string.qemu_versions,
+                QemuVersionManager.getActive(this).displayName);
+        qemuVersionRow.row.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(AppSettingsActivity.this, QemuVersionsActivity.class));
+            }
+        });
 
         // Display
         LinearLayout display = addSection(R.string.section_display);

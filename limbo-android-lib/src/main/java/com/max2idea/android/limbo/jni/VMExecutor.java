@@ -1005,8 +1005,23 @@ private String getQemuLibrary() {
             ignoreBreakpointInvalidation(LimboSettingsManager.getIgnoreBreakpointInvalidation(LimboApplication.getInstance())?1:0, 2000);
             QmpClient.setExternal(LimboSettingsManager.getEnableExternalQMP(LimboApplication.getInstance()));
             String libFilename = getQemuLibrary();
+            String libPath = FileUtils.getNativeLibDir(LimboApplication.getInstance()) + "/" + libFilename;
+            // Use the externally installed QEMU build when one is selected. Its
+            // libraries were preloaded by LimboActivity.setupNativeLibs(), so the
+            // JNI loader resolves this path to the already mapped image.
+            try {
+                com.max2idea.android.limbo.qemu.QemuVersion active =
+                        com.max2idea.android.limbo.qemu.QemuVersionManager.getActive(LimboApplication.getInstance());
+                if (active != null && !active.isBuiltin() && active.libDir() != null) {
+                    java.io.File qemu = new java.io.File(active.libDir(), active.qemuLib);
+                    if (qemu.isFile()) {
+                        libPath = qemu.getAbsolutePath();
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
             res = start(Config.storagedir, LimboApplication.getBasefileDir(),
-                    libFilename, FileUtils.getNativeLibDir(LimboApplication.getInstance()) + "/" + libFilename,
+                    libFilename, libPath,
                     Config.SDLHintScale, params);
         } catch (Exception ex) {
             ToastUtils.toastLong(LimboApplication.getInstance(), ex.getMessage());

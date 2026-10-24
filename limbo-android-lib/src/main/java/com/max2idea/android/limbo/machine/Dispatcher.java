@@ -374,11 +374,33 @@ public class Dispatcher implements ViewListener {
     }
 
     private boolean deleteVM(Machine machine) {
-        return MachineController.getInstance().deleteMachine(machine);
+        boolean deleted = MachineController.getInstance().deleteMachine(machine);
+        if (deleted && machine != null) {
+            // UI preferences are keyed by machine name; drop the custom cover/icon so
+            // a future machine with the same name does not inherit it.
+            try {
+                com.max2idea.android.limbo.main.UiPrefs.setMachineIcon(
+                        com.max2idea.android.limbo.main.LimboApplication.getInstance(),
+                        machine.getName(), null);
+            } catch (Exception ignored) {
+            }
+        }
+        return deleted;
     }
 
     private boolean createVM(String machineName) {
-        return MachineController.getInstance().createVM(machineName);
+        boolean created = MachineController.getInstance().createVM(machineName);
+        if (created) {
+            // A brand new machine must start with the default letter icon even if a
+            // previous machine used the same name.
+            try {
+                com.max2idea.android.limbo.main.UiPrefs.setMachineIcon(
+                        com.max2idea.android.limbo.main.LimboApplication.getInstance(),
+                        machineName, null);
+            } catch (Exception ignored) {
+            }
+        }
+        return created;
     }
 
 
