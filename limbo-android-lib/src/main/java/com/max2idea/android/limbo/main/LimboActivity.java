@@ -1445,6 +1445,15 @@ public class LimboActivity extends AppCompatActivity
         logNative("loading external QEMU " + version.version + " from " + version.dir);
         System.loadLibrary("compat-limbo");
         System.loadLibrary("compat-musl");
+        if (Config.enable_SDL) {
+            try {
+                if (Build.VERSION.SDK_INT >= 26) {
+                    System.loadLibrary("compat-SDL2-addons");
+                }
+            } catch (Throwable t) {
+                logNative("compat-SDL2-addons failed: " + t);
+            }
+        }
         java.io.File libDir = version.libDir();
         if (libDir == null || !libDir.isDirectory()) {
             throw new java.io.IOException("version directory missing");
@@ -1465,6 +1474,7 @@ public class LimboActivity extends AppCompatActivity
         }
         System.load(qemu.getAbsolutePath());
         logNative("OK " + version.qemuLib);
+        System.loadLibrary("compat-SDL2-ext");
         System.loadLibrary("limbo");
         logNative("OK limbo");
     }
