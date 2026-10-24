@@ -2800,10 +2800,13 @@ public class LimboActivity extends AppCompatActivity
         machineHydrated = true;
         maybeEnableEditors();
         if (!listenersEnabled && mScrollView != null) {
-            // Failsafe if an adapter thread never reports back.
+            // Failsafe if an adapter thread never reports back: after 2.5s allow
+            // editing again even if the counter did not reach zero.
             mScrollView.postDelayed(new Runnable() {
                 public void run() {
-                    maybeEnableEditors();
+                    if (!listenersEnabled) {
+                        setUserPressed(true);
+                    }
                 }
             }, 2500);
         }
@@ -3425,7 +3428,9 @@ private void populateFirmware() {
                         if (getMachine() != null) {
                             seMachineDriveValue(fileType, getDriveValue(fileType));
                         }
-                        pendingDiskAdapters--;
+                        if (pendingDiskAdapters > 0) {
+                            pendingDiskAdapters--;
+                        }
                         maybeEnableEditors();
                     }
                 });
