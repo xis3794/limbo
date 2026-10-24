@@ -39,6 +39,12 @@
             android:launchMode="singleTask"
             android:theme="@style/Theme.AppCompat.NoActionBar" />
         <activity
+            android:name="com.max2idea.android.limbo.vnc.VncActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false"
+            android:theme="@style/LimboMainTheme" />
+
+        <activity
             android:name="com.max2idea.android.limbo.main.AppSettingsActivity"
             android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize"
             android:label="@string/global_settings"

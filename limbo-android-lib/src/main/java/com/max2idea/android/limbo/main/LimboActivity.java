@@ -116,6 +116,7 @@ public class LimboActivity extends AppCompatActivity
     private static final int SETTINGS = 13;
     private static final int TOOLS = 14;
     private static final int IMPORT_BIOS_FILE = 15;
+    private static final int VNC_CLIENT = 16;
 
     // disk mapping
     private static final Hashtable<FileType, DiskInfo> diskMapping = new Hashtable<>();
@@ -507,7 +508,15 @@ public class LimboActivity extends AppCompatActivity
                     return;
 
                 String netcfg = (String) ((ArrayAdapter<?>) mNetConfig.getAdapter()).getItem(position);
-                notifyFieldChange(MachineProperty.NETCONFIG, netcfg);
+                // Re-attaching this listener while the page is populated triggers a
+                // synthetic selection callback for the current value; only the actual
+                // change should be stored and warned about, otherwise the external
+                // network dialog pops up every time a machine is opened.
+                String currentNetwork = getMachine().getNetwork();
+                boolean networkChanged = currentNetwork == null || !currentNetwork.equals(netcfg);
+                if (networkChanged) {
+                    notifyFieldChange(MachineProperty.NETCONFIG, netcfg);
+                }
                 if (position > 0 && getMachine().getPaused() == 0
                         && MachineController.getInstance().getCurrStatus() != MachineStatus.Running) {
                     mNetworkCard.setEnabled(true);
@@ -519,10 +528,12 @@ public class LimboActivity extends AppCompatActivity
                     mHOSTFWD.setEnabled(false);
                 }
 
-                if (netcfg.equals("TAP")) {
-                    onTap();
-                } else if (netcfg.equals("User")) {
-                    LimboActivityCommon.onNetworkUser(LimboActivity.this);
+                if (networkChanged) {
+                    if (netcfg.equals("TAP")) {
+                        onTap();
+                    } else if (netcfg.equals("User")) {
+                        LimboActivityCommon.onNetworkUser(LimboActivity.this);
+                    }
                 }
             }
 
@@ -3343,6 +3354,9 @@ private void populateFirmware() {
         menu.add(0, IMPORT_BIOS_FILE, 0, R.string.ImportBIOSFile);
         menu.add(0, SETTINGS, 0, R.string.Settings);
         menu.add(0, TOOLS, 0, R.string.advancedTools);
+        if (getMachine() != null && getMachine().getEnableVNC() == 1) {
+            menu.add(0, VNC_CLIENT, 0, R.string.vnc_open);
+        }
         menu.add(0, VIEWLOG, 0, R.string.ViewLog);
         menu.add(0, HELP, 0, R.string.help);
         menu.add(0, CHANGELOG, 0, R.string.Changelog);
@@ -3382,6 +3396,12 @@ private void populateFirmware() {
             Help.showHelp(this);
         } else if (item.getItemId() == VIEWLOG) {
             Logger.viewLimboLog(LimboActivity.this);
+        } else if (item.getItemId() == VNC_CLIENT) {
+            if (MachineController.getInstance().isRunning()) {
+                startActivity(new Intent(this, com.max2idea.android.limbo.vnc.VncActivity.class));
+            } else {
+                ToastUtils.toastShort(this, getString(R.string.vnc_not_running));
+            }
         } else if (item.getItemId() == CHANGELOG) {
             LimboActivityCommon.showChangelog(LimboActivity.this);
         } else if (item.getItemId() == LICENSE) {

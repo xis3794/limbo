@@ -39,6 +39,7 @@ import com.max2idea.android.limbo.machine.Machine;
 import com.max2idea.android.limbo.machine.MachineAction;
 import com.max2idea.android.limbo.network.NetworkUtils;
 import com.max2idea.android.limbo.toast.ToastUtils;
+import com.max2idea.android.limbo.ui.UiDialogs;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -293,27 +294,21 @@ public class LimboActivityCommon {
     }
 
     public static void onNetworkUser(final Activity activity) {
-        final DialogInterface.OnClickListener okListener = new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface dialog, int which) {
-
-            }
-        };
-
-        final DialogInterface.OnClickListener helpListener =
-                new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int which) {
-                        LimboActivityCommon.goToURL(activity, Config.faqLink);
-                    }
-                };
-
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                DialogUtils.UIAlert(activity,
+                UiDialogs.prompt(activity,
                         activity.getString(R.string.network),
                         activity.getString(R.string.externalNetworkWarning),
-                        16, false, activity.getString(android.R.string.ok), okListener,
-                        null, null, activity.getString(R.string.faq), helpListener);
+                        activity.getString(R.string.faq),
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                LimboActivityCommon.goToURL(activity, Config.faqLink);
+                            }
+                        },
+                        activity.getString(android.R.string.ok),
+                        null);
             }
         });
     }

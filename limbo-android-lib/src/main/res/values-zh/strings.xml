@@ -521,4 +521,30 @@
     <string name="force_close">"强制结束"</string>
     <string name="keep_waiting">"继续等待"</string>
     <string name="status_sdl_background">"画面在后台运行"</string>
+
+    <string name="keycat_letters">"字母"</string>
+    <string name="keycat_digits">"数字"</string>
+    <string name="keycat_function">"功能键"</string>
+    <string name="keycat_editing">"方向 / 编辑"</string>
+    <string name="keycat_modifiers">"修饰键"</string>
+    <string name="keycat_symbols">"符号"</string>
+    <string name="keycat_numpad">"小键盘"</string>
+    <string name="keycat_system">"系统 / 媒体"</string>
+    <string name="keycat_mouse">"鼠标按键"</string>
+    <string name="mapper_pick_keys">"选择按键"</string>
+    <string name="mapper_select_key_first">"请先点击一个映射按键，再选择它要发送的按键"</string>
+
+    <string name="vnc_keyboard">"键盘"</string>
+    <string name="vnc_retry">"重试"</string>
+    <string name="vnc_close">"关闭"</string>
+    <string name="vnc_connecting">"正在查找 VNC 服务…"</string>
+    <string name="vnc_connected">"已连接 · %1$d×%2$d"</string>
+    <string name="vnc_disconnected">"已断开"</string>
+    <string name="vnc_not_running">"虚拟机没有以 VNC 模式运行"</string>
+    <string name="vnc_no_server">"未在 127.0.0.1（5900-5910）找到 VNC 服务。请把虚拟机的显示模式设为 VNC 后启动。"</string>
+    <string name="vnc_auth_failed">"VNC 认证失败，请检查应用设置里的 VNC 密码。"</string>
+    <string name="vnc_connection_failed">"连接失败：%1$s"</string>
+    <string name="vnc_send">"发送"</string>
+    <string name="vnc_key_prompt">"要发送的文字"</string>
+    <string name="vnc_open">"打开 VNC 客户端"</string>
 </resources>

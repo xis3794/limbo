@@ -27,6 +27,12 @@ public final class UiDialogs {
     public static Dialog prompt(Activity activity, String title, String message,
                                 String negativeText, String positiveText,
                                 final Runnable onPositive) {
+        return prompt(activity, title, message, negativeText, null, positiveText, onPositive);
+    }
+
+    public static Dialog prompt(Activity activity, String title, String message,
+                                String negativeText, final Runnable onNegative,
+                                String positiveText, final Runnable onPositive) {
         final Dialog dialog = new Dialog(activity, R.style.Limbo_Dialog_Plain);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
@@ -46,6 +52,9 @@ public final class UiDialogs {
             @Override
             public void onClick(View v) {
                 dialog.dismiss();
+                if (onNegative != null) {
+                    onNegative.run();
+                }
             }
         });
 

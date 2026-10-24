@@ -360,7 +360,89 @@ public class KeyMapManager {
     }
 
     private void advancedKey() {
-        promptAdvancedKey();
+        promptKeyCategory();
+    }
+
+    /**
+     * Two step picker: choose a keyboard group first, then tick the keys that the
+     * selected mapper button should send. This exposes the whole PC keyboard instead
+     * of the old ten-entry shortlist.
+     */
+    private void promptKeyCategory() {
+        if (keySurfaceView == null || keySurfaceView.pointers.isEmpty()) {
+            ToastUtils.toastShort(activity, activity.getString(R.string.mapper_select_key_first));
+            return;
+        }
+        final List<KeyCatalog.Category> categories = KeyCatalog.categories();
+        final CharSequence[] labels = new CharSequence[categories.size()];
+        for (int i = 0; i < categories.size(); i++) {
+            labels[i] = activity.getString(categories.get(i).titleRes);
+        }
+        new AlertDialog.Builder(activity)
+                .setTitle(R.string.SpecialKeysButtons)
+                .setItems(labels, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        promptKeyPicker(categories.get(which));
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void promptKeyPicker(final KeyCatalog.Category category) {
+        final CharSequence[] labels = new CharSequence[category.keys.size()];
+        final boolean[] checked = new boolean[category.keys.size()];
+        for (int i = 0; i < category.keys.size(); i++) {
+            labels[i] = category.keys.get(i).label;
+        }
+        new AlertDialog.Builder(activity)
+                .setTitle(activity.getString(category.titleRes))
+                .setMultiChoiceItems(labels, checked, new DialogInterface.OnMultiChoiceClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which, boolean isChecked) {
+                        checked[which] = isChecked;
+                    }
+                })
+                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        applyPickedKeys(category, checked);
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void applyPickedKeys(KeyCatalog.Category category, boolean[] checked) {
+        if (keySurfaceView == null || keySurfaceView.pointers.isEmpty()) {
+            return;
+        }
+        KeyMapper.KeyMapping mapping = null;
+        for (KeyMapper.KeyMapping keyMapping : keySurfaceView.pointers.values()) {
+            mapping = keyMapping;
+            break;
+        }
+        if (mapping == null) {
+            return;
+        }
+        boolean added = false;
+        for (int i = 0; i < checked.length; i++) {
+            if (!checked[i]) {
+                continue;
+            }
+            KeyCatalog.Key key = category.keys.get(i);
+            if (key.mouse) {
+                mapping.addMouseButton(key.code);
+            } else {
+                mapping.addKeyCode(key.code, null);
+            }
+            added = true;
+        }
+        if (added) {
+            saveKeyMappers();
+            keySurfaceView.paint(false);
+        }
     }
 
     private void promptAdvancedKey() {

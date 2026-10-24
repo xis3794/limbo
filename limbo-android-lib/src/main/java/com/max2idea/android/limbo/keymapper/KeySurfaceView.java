@@ -763,6 +763,84 @@ public class KeySurfaceView extends SurfaceView implements SurfaceHolder.Callbac
             text = "F11";
         else if (keycode == KeyEvent.KEYCODE_F12)
             text = "F12";
+        else if (keycode >= KeyEvent.KEYCODE_A && keycode <= KeyEvent.KEYCODE_Z)
+            text = ((char) ('A' + keycode - KeyEvent.KEYCODE_A)) + "";
+        else if (keycode >= KeyEvent.KEYCODE_0 && keycode <= KeyEvent.KEYCODE_9)
+            text = ((char) ('0' + keycode - KeyEvent.KEYCODE_0)) + "";
+        else if (keycode == KeyEvent.KEYCODE_GRAVE)
+            text = "`";
+        else if (keycode == KeyEvent.KEYCODE_MINUS)
+            text = "-";
+        else if (keycode == KeyEvent.KEYCODE_EQUALS)
+            text = "=";
+        else if (keycode == KeyEvent.KEYCODE_LEFT_BRACKET)
+            text = "[";
+        else if (keycode == KeyEvent.KEYCODE_RIGHT_BRACKET)
+            text = "]";
+        else if (keycode == KeyEvent.KEYCODE_BACKSLASH)
+            text = "\\";
+        else if (keycode == KeyEvent.KEYCODE_SEMICOLON)
+            text = ";";
+        else if (keycode == KeyEvent.KEYCODE_APOSTROPHE)
+            text = "'";
+        else if (keycode == KeyEvent.KEYCODE_COMMA)
+            text = ",";
+        else if (keycode == KeyEvent.KEYCODE_PERIOD)
+            text = ".";
+        else if (keycode == KeyEvent.KEYCODE_SLASH)
+            text = "/";
+        else if (keycode >= KeyEvent.KEYCODE_NUMPAD_0 && keycode <= KeyEvent.KEYCODE_NUMPAD_9)
+            text = "N" + (keycode - KeyEvent.KEYCODE_NUMPAD_0);
+        else if (keycode == KeyEvent.KEYCODE_NUMPAD_ADD)
+            text = "N+";
+        else if (keycode == KeyEvent.KEYCODE_NUMPAD_SUBTRACT)
+            text = "N-";
+        else if (keycode == KeyEvent.KEYCODE_NUMPAD_MULTIPLY)
+            text = "N*";
+        else if (keycode == KeyEvent.KEYCODE_NUMPAD_DIVIDE)
+            text = "N/";
+        else if (keycode == KeyEvent.KEYCODE_NUMPAD_DOT)
+            text = "N.";
+        else if (keycode == KeyEvent.KEYCODE_NUMPAD_COMMA)
+            text = "N,";
+        else if (keycode == KeyEvent.KEYCODE_NUMPAD_EQUALS)
+            text = "N=";
+        else if (keycode == KeyEvent.KEYCODE_NUMPAD_LEFT_PAREN)
+            text = "N(";
+        else if (keycode == KeyEvent.KEYCODE_NUMPAD_RIGHT_PAREN)
+            text = "N)";
+        else if (keycode == KeyEvent.KEYCODE_NUMPAD_ENTER)
+            text = "NEnt";
+        else if (keycode == KeyEvent.KEYCODE_META_LEFT)
+            text = "Meta";
+        else if (keycode == KeyEvent.KEYCODE_META_RIGHT)
+            text = "Meta";
+        else if (keycode == KeyEvent.KEYCODE_FUNCTION)
+            text = "Fn";
+        else if (keycode == KeyEvent.KEYCODE_CAPS_LOCK)
+            text = "Caps";
+        else if (keycode == KeyEvent.KEYCODE_MENU)
+            text = "Menu";
+        else if (keycode == KeyEvent.KEYCODE_SEARCH)
+            text = "Srch";
+        else if (keycode == KeyEvent.KEYCODE_VOLUME_UP)
+            text = "Vol+";
+        else if (keycode == KeyEvent.KEYCODE_VOLUME_DOWN)
+            text = "Vol-";
+        else if (keycode == KeyEvent.KEYCODE_VOLUME_MUTE)
+            text = "Mute";
+        else if (keycode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+            text = "Play";
+        else if (keycode == KeyEvent.KEYCODE_MEDIA_NEXT)
+            text = "Next";
+        else if (keycode == KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+            text = "Prev";
+        else if (keycode == KeyEvent.KEYCODE_SLEEP)
+            text = "Sleep";
+        else if (keycode == KeyEvent.KEYCODE_WAKEUP)
+            text = "Wake";
+        else if (keycode == KeyEvent.KEYCODE_POWER)
+            text = "Pwr";
         else
             return ((char) unicodeChar) + "";
         return text;

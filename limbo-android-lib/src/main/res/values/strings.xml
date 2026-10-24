@@ -520,4 +520,30 @@
     <string name="force_close">"Force close"</string>
     <string name="keep_waiting">"Keep waiting"</string>
     <string name="status_sdl_background">"display in background"</string>
+
+    <string name="keycat_letters">"Letters"</string>
+    <string name="keycat_digits">"Digits"</string>
+    <string name="keycat_function">"Function keys"</string>
+    <string name="keycat_editing">"Navigation / editing"</string>
+    <string name="keycat_modifiers">"Modifiers"</string>
+    <string name="keycat_symbols">"Symbols"</string>
+    <string name="keycat_numpad">"Numeric keypad"</string>
+    <string name="keycat_system">"System / media"</string>
+    <string name="keycat_mouse">"Mouse buttons"</string>
+    <string name="mapper_pick_keys">"Pick keys"</string>
+    <string name="mapper_select_key_first">"Tap a mapped key first, then choose the buttons it should send"</string>
+
+    <string name="vnc_keyboard">"Keyboard"</string>
+    <string name="vnc_retry">"Retry"</string>
+    <string name="vnc_close">"Close"</string>
+    <string name="vnc_connecting">"Looking for the VNC service…"</string>
+    <string name="vnc_connected">"Connected · %1$d×%2$d"</string>
+    <string name="vnc_disconnected">"Disconnected"</string>
+    <string name="vnc_not_running">"The virtual machine is not running in VNC mode"</string>
+    <string name="vnc_no_server">"No VNC service found on 127.0.0.1 (5900-5910). Start the machine with Display set to VNC."</string>
+    <string name="vnc_auth_failed">"VNC authentication failed. Check the VNC password in the app settings."</string>
+    <string name="vnc_connection_failed">"Connection failed: %1$s"</string>
+    <string name="vnc_send">"Send"</string>
+    <string name="vnc_key_prompt">"Text to send"</string>
+    <string name="vnc_open">"Open VNC client"</string>
 </resources>

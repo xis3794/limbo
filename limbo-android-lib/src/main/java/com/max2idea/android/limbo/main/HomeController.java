@@ -33,6 +33,7 @@ import com.max2idea.android.limbo.machine.MachineProperty;
 import com.max2idea.android.limbo.ui.AppBackgroundView;
 import com.max2idea.android.limbo.ui.GlassBlurView;
 import com.max2idea.android.limbo.ui.UiDialogs;
+import com.max2idea.android.limbo.vnc.VncActivity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -282,7 +283,12 @@ public class HomeController implements
         screenEnter.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (MachineController.getInstance().isRunning()) {
+                if (!MachineController.getInstance().isRunning()) {
+                    return;
+                }
+                if (MachineController.getInstance().isVNCEnabled()) {
+                    activity.startActivity(new Intent(activity, VncActivity.class));
+                } else {
                     activity.startActivity(new Intent(activity, LimboSDLActivity.class));
                 }
             }
@@ -548,9 +554,9 @@ public class HomeController implements
             screenDisplay.setText(display);
         }
 
-        boolean sdl = running && (machine == null || machine.getEnableVNC() != 1);
-        screenEnter.setEnabled(sdl);
-        screenEnter.setAlpha(sdl ? 1f : 0.5f);
+        boolean viewable = running && machine != null;
+        screenEnter.setEnabled(viewable);
+        screenEnter.setAlpha(viewable ? 1f : 0.5f);
         screenStop.setEnabled(running || paused);
         screenStop.setAlpha(running || paused ? 1f : 0.5f);
         if (screenStop instanceof android.widget.Button) {
