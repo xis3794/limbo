@@ -1629,6 +1629,24 @@ public class LimboActivity extends AppCompatActivity
                 logNative("compat-SDL2-addons failed: " + t);
             }
         }
+        // Libraries that stay in the APK: the emulator display/2D stack and
+        // the Android compatibility shims. Preload them so the DT_NEEDED
+        // entries of the downloaded QEMU resolve against the already mapped
+        // copies instead of relying on the linker search path.
+        try {
+            System.loadLibrary("pixman-1");
+            logNative("OK pixman-1");
+        } catch (Throwable t) {
+            logNative("pixman-1 failed: " + t);
+        }
+        if (Config.enable_SDL) {
+            try {
+                System.loadLibrary("SDL2");
+                logNative("OK SDL2");
+            } catch (Throwable t) {
+                logNative("SDL2 failed: " + t);
+            }
+        }
         java.io.File libDir = version.libDir();
         if (libDir == null || !libDir.isDirectory()) {
             throw new java.io.IOException("version directory missing");
