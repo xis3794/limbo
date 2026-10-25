@@ -32,6 +32,7 @@ DEL_LIBSDIR=rm -rf $(NDK_PROJECT_PATH)/libs/* \
 
 
 INSTALL_GLIB_LIBS=cp -f glib/glib/.libs/*.so \
+    glib/gmodule/.libs/*.so \
     $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/
 
 INSTALL_FFI_LIBS=cp -f libffi/$(GNU_HOST)/.libs/*.a \
@@ -223,6 +224,17 @@ glib: ndk
 else
 glib: ndk
 	cd $(LIMBO_JNI_ROOT)/glib/glib && $(MAKE) -j $(BUILD_THREADS) CFLAGS="$(ARCH_CFLAGS) \
+	$(NDK_SYSROOT_INC) \
+	$(NDK_SYSROOT_ARCH_INC) \
+	-I$(NDK_INCLUDE)  -I${SYSROOT}/usr/include $(SYS_ROOT) \
+	-I${NDK_ROOT}/sources/android/support/include -I${LIMBO_JNI_ROOT}/compat \
+	-include ${LIMBO_JNI_ROOT}/compat/musl/compat_iconv.h -I${LIMBO_JNI_ROOT}/compat/musl -I${LIMBO_JNI_ROOT}/compat/musl/include " \
+	LDFLAGS=" $(ARCH_LD_CLANG_FLAGS) $(ARCH_LD_FLAGS) $(SYS_ROOT) -L${LIMBO_JNI_ROOT}/../obj/local/$(APP_ABI) \
+	-lc -lcompat-musl -llog -lcompat-limbo " \
+	-lgcc \
+	LIBFFI_CFLAGS="-I${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/include " \
+	LIBFFI_LIBS="${LIMBO_JNI_ROOT}/libffi/$(GNU_HOST)/.libs/libffi.a "
+	cd $(LIMBO_JNI_ROOT)/glib/gmodule && $(MAKE) -j $(BUILD_THREADS) CFLAGS="$(ARCH_CFLAGS) \
 	$(NDK_SYSROOT_INC) \
 	$(NDK_SYSROOT_ARCH_INC) \
 	-I$(NDK_INCLUDE)  -I${SYSROOT}/usr/include $(SYS_ROOT) \
