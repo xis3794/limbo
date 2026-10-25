@@ -112,9 +112,16 @@ MISC += --disable-tools --disable-libnfs
 MISC +=  --disable-qom-cast-debug
 MISC += --disable-libnfs --disable-libiscsi --disable-docs
 MISC += --disable-rdma --disable-brlapi --disable-curl
-# libattr: ENABLED - bionic provides xattr; cap-ng is 11.x-only (stubbed)
+# libattr: bionic provides the xattr syscalls but no attr/xattr.h and no
+# libcap-ng; only the QEMU 9+ pipeline ships stubs for them. 5.1/8.0.5 build
+# without virtfs instead.
+ifneq ($(filter 5.1.0 8.0.5,$(USE_QEMU_VERSION)),)
+MISC += --disable-vde --disable-netmap
+MISC += --disable-cap-ng --disable-attr --disable-pie
+else
 MISC += --disable-vde --disable-netmap
 MISC += --disable-cap-ng --enable-attr --disable-pie
+endif
 MISC += --disable-rbd --disable-lzo  --disable-snappy 
 MISC += --disable-seccomp --disable-bzip2
 MISC += --disable-vte
@@ -142,8 +149,13 @@ NUMA = --disable-numa
 #VHOST (options removed in QEMU 8.x; see android-qemu-config-5.1.0.mak)
 VHOST =
 
-#VIRT (9p shared folders) - ENABLED: Windows/Linux guests can mount host dirs
+#VIRT (9p shared folders) - ENABLED for QEMU 9+ (cap-ng/attr stubs exist).
+# QEMU 5.1/8.0.5 cannot link virtfs without libattr devel, so disable it there.
+ifneq ($(filter 5.1.0 8.0.5,$(USE_QEMU_VERSION)),)
+VIRT = --disable-virtfs
+else
 VIRT = --enable-virtfs
+endif
 
 #AIO (Not supported yet)
 LINUX_AIO = --disable-linux-aio
