@@ -58,6 +58,10 @@ jobs:
           command -v meson || { for i in 1 2 3; do pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple meson ninja && break || sleep 5; done; }
           meson --version || true
           ninja --version || true
+          # glib 2.56 (QEMU 5.1/8.0.5) runs autogen.sh which needs gtkdocize
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gtk-doc-tools
+          command -v gtkdocize && echo "gtkdocize OK"
           echo "tool check done"
           # patchelf >= 0.18 needed for --replace-symbol (rename _rwlock_*
           # to pthread_rwlock_* in glib/qemu so Huawei linker can resolve

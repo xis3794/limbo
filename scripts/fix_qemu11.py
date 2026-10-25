@@ -138,6 +138,24 @@ else:
 write('meson.build', meson)
 
 # ---------------------------------------------------------------------------
+# 1b. QEMU 10.2 added a static get_fd() helper in migration/vmstate-types.c.
+#     Limbo force-includes get_fd() from limbo_compat_filesystem.h, so the
+#     static definition is a conflicting declaration. Rename QEMU's helper.
+# ---------------------------------------------------------------------------
+try:
+    vmstate = read('migration/vmstate-types.c')
+except Exception:
+    vmstate = None
+if vmstate and 'static int get_fd(QEMUFile' in vmstate:
+    vmstate = vmstate.replace('static int get_fd(QEMUFile',
+                              'static int limbo_vmstate_get_fd(QEMUFile', 1)
+    vmstate = vmstate.replace('.get  = get_fd,', '.get  = limbo_vmstate_get_fd,', 1)
+    write('migration/vmstate-types.c', vmstate)
+    log('[OK] migration/vmstate-types.c: get_fd renamed (Limbo compat clash)')
+else:
+    log('[SKIP] migration/vmstate-types.c: no get_fd() helper')
+
+# ---------------------------------------------------------------------------
 # 2. audio: QEMU11 already defaults to 22050 (QEMU8 needed a patch)
 # ---------------------------------------------------------------------------
 sub('audio/audio.c',
