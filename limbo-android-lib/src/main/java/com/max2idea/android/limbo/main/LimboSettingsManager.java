@@ -162,6 +162,24 @@ public class LimboSettingsManager extends PreferenceActivity {
         return prefs.getInt("exitCode", Config.EXIT_SUCCESS);
     }
 
+    /**
+     * Last native/QEMU error. MachineService stores it before the process is torn
+     * down (the VM has to exit to unload the native libraries), so the next launch
+     * can show the real reason instead of an app that simply disappears.
+     */
+    public static String getLastVmError(Context context) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        return prefs.getString("lastVmError", null);
+    }
+
+    @SuppressLint("ApplySharedPref")
+    public static void setLastVmError(Context context, String error) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        SharedPreferences.Editor edit = prefs.edit();
+        edit.putString("lastVmError", error);
+        edit.commit();
+    }
+
     //XXX: we need to make sure this gets written to preferences right before we call System.exit()
     // so we need to use commit instead of apply
     @SuppressLint("ApplySharedPref")

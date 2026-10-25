@@ -575,4 +575,14 @@
     <string name="qemu_no_packages">"暂无已发布的版本"</string>
     <string name="qemu_retry">"重试"</string>
     <string name="qemu_installed_badge">"已安装"</string>
+    <string name="storage_permission_title">"需要存储权限"</string>
+    <string name="storage_permission_message">"Limbo 需要访问共享存储来打开磁盘镜像并写入日志。没有该权限虚拟机无法启动。请授权后再次点击启动。"</string>
+    <string name="storage_permission_grant">"授权"</string>
+    <string name="storage_permission_settings">"应用设置"</string>
+    <string name="storage_permission_granted">"已获得存储权限"</string>
+    <string name="storage_permission_needed">"启动虚拟机需要存储权限"</string>
+    <string name="drive_file_missing">"无法访问 %1$s"</string>
+    <string name="last_vm_error_title">"上次虚拟机启动失败"</string>
+    <string name="last_vm_error_ok">"确定"</string>
+    <string name="no_boot_media_warning">"没有配置任何磁盘镜像，虚拟机可能无法引导；请在“存储”页重新选择镜像。"</string>
 </resources>

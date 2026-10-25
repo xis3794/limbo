@@ -9,7 +9,8 @@ else ifeq ($(USE_QEMU_VERSION),5.1.0)
 include $(QEMU_CONFIG_DIR)/android-qemu-config-5.1.0.mak
 else ifeq ($(USE_QEMU_VERSION),8.0.5)
 include $(QEMU_CONFIG_DIR)/android-qemu-config-8.0.5.mak
-else ifeq ($(USE_QEMU_VERSION),11.1.0)
+else ifneq ($(filter 10.% 11.%,$(USE_QEMU_VERSION)),)
+# QEMU 9+ uses the meson/glib2.76 pipeline described by the 11.x config.
 include $(QEMU_CONFIG_DIR)/android-qemu-config-11.1.0.mak
 else
 $(error Unsupported QEMU version = $(USE_QEMU_VERSION))

@@ -6,12 +6,14 @@ on:
       qemu_version:
         description: 'QEMU version to build'
         required: true
-        default: '11.1.0'
+        default: '11.1.2'
         type: choice
         options:
           - '5.1.0'
           - '8.0.5'
+          - '10.2.0'
           - '11.1.0'
+          - '11.1.2'
       build_host:
         description: 'Target device ABI (arm64-v8a recommended)'
         required: true
@@ -36,7 +38,7 @@ jobs:
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      QEMU_VER: ${{ github.event.inputs.qemu_version || '5.1.0' }}
+      QEMU_VER: ${{ github.event.inputs.qemu_version || '11.1.2' }}
       BUILD_HOST: ${{ github.event.inputs.build_host || 'arm64-v8a' }}
       BUILD_GUEST: ${{ github.event.inputs.build_guest || 'x86_64-softmmu' }}
 
@@ -127,10 +129,11 @@ jobs:
       - name: Apply patches & prepare QEMU
         run: |
           cd limbo-android-lib/src/main/jni
-          if [ "$QEMU_VER" = "11.1.0" ]; then
-            echo "=== Running QEMU 11.1.0 Limbo/Android adaptation ==="
+          case "$QEMU_VER" in
+            10.*|11.*)
+            echo "=== Running QEMU $QEMU_VER Limbo/Android adaptation (meson pipeline) ==="
             python3 "$GITHUB_WORKSPACE/scripts/fix_qemu11.py" "$PWD"
-            echo "=== Downloading glib 2.76.6 (meson build, needed by QEMU11) ==="
+            echo "=== Downloading glib 2.76.6 (meson build, needed by QEMU 9+) ==="
             wget -q https://download.gnome.org/sources/glib/2.76/glib-2.76.6.tar.xz
             tar xf glib-2.76.6.tar.xz && mv glib-2.76.6 glib276 && rm glib-2.76.6.tar.xz
             echo "=== Downloading libslirp 4.7.0 (built later inside make limbo) ==="
@@ -139,20 +142,23 @@ jobs:
             echo "=== Downloading dtc/libfdt ==="
             wget -q --tries=5 --retry-connrefused --waitretry=5 https://gitlab.com/qemu-project/dtc/-/archive/v1.7.0/dtc-v1.7.0.tar.gz
             tar xzf dtc-v1.7.0.tar.gz && mv dtc-v1.7.0 qemu/dtc && rm dtc-v1.7.0.tar.gz
-          elif [ "$QEMU_VER" = "8.0.5" ]; then
+            ;;
+            8.0.5)
             echo "=== Running QEMU 8.0.5 Limbo/Android adaptation ==="
             python3 "$GITHUB_WORKSPACE/scripts/fix_qemu805.py" "$PWD"
             echo "=== Downloading libslirp 4.7.0 (built later inside make limbo) ==="
             cp "$GITHUB_WORKSPACE/tools/libslirp-4.7.0.tar.gz" .
             tar xzf libslirp-4.7.0.tar.gz && mv libslirp-v4.7.0 libslirp && rm libslirp-4.7.0.tar.gz
-          else
+            ;;
+            *)
             cd qemu && patch -p1 < ../patches/qemu-$QEMU_VER.patch && cd ..
             if [ "$QEMU_VER" = "5.1.0" ]; then
               # bionic has no malloc_trim: stub it out in rcu.c
               sed -i 's/^#ifdef CONFIG_MALLOC_TRIM/#if 0 \/* CONFIG_MALLOC_TRIM *\//' qemu/util/rcu.c
               echo "rcu.c malloc_trim disabled for Android"
             fi
-          fi
+            ;;
+          esac
           cd glib && patch -p1 < ../patches/glib-2.56.1.patch && cd ..
           cd SDL2 && patch -p1 < ../patches/sdl2-2.0.8.patch && cd ..
 

@@ -151,6 +151,12 @@ public class MachineService extends Service {
             if (!res.equals("VM shutdown")) {
                 ToastUtils.toastLong(service, res);
                 Log.e(TAG, res);
+                // Remember the reason: the process is killed below, so the next
+                // launch shows a dialog with the actual QEMU error.
+                try {
+                    LimboSettingsManager.setLastVmError(service, res);
+                } catch (Throwable ignore) {
+                }
                 // Also persist the QEMU error to a file: logcat gets rotated
                 // away very quickly on this device.
                 try {
@@ -164,6 +170,10 @@ public class MachineService extends Service {
                 Log.d(TAG, res);
                 //set the exit code
                 LimboSettingsManager.setExitCode(service, Config.EXIT_SUCCESS);
+                try {
+                    LimboSettingsManager.setLastVmError(service, null);
+                } catch (Throwable ignore) {
+                }
             }
             try {
                 Thread.sleep(2000);

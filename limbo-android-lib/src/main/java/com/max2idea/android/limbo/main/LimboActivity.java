@@ -18,12 +18,14 @@
  */
 package com.max2idea.android.limbo.main;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
@@ -57,6 +59,7 @@ import android.widget.TextView;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.widget.NestedScrollView;
 
@@ -217,6 +220,17 @@ public class LimboActivity extends AppCompatActivity
     private int pendingDiskAdapters;
     private boolean machineHydrated;
     private boolean listenersEnabled;
+    /**
+     * Spinners whose current selection was set by code. The synthetic
+     * onItemSelected() callback must never be written back to the machine, or a
+     * "None" placeholder ends up replacing a real disk image path.
+     */
+    private final java.util.IdentityHashMap<Object, Integer> programmaticSpinners =
+            new java.util.IdentityHashMap<>();
+    private boolean storagePermissionAsked;
+    private boolean lastErrorShown;
+    private int autoStartAttempts;
+    private static final int REQ_STORAGE_PERMISSION = 9103;
 
     // Glass UI
     private GlassBlurView mToolbarGlass;
@@ -296,6 +310,9 @@ public class LimboActivity extends AppCompatActivity
     public void setUserPressed(boolean pressed) {
         listenersEnabled = pressed;
         if (pressed) {
+            // Attaching a listener immediately fires onItemSelected() for the
+            // current selection; swallow those synthetic callbacks.
+            suppressAllDriveSpinners();
             setupMiscOptions();
             setupNonRemovableDiskListeners();
             enableRemovableDiskListeners();
@@ -315,6 +332,151 @@ public class LimboActivity extends AppCompatActivity
         if (pendingDiskAdapters == 0 && machineHydrated && !listenersEnabled) {
             setUserPressed(true);
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // Startup safety net: storage permission + no silently wiped drives
+    // ---------------------------------------------------------------------
+
+    /**
+     * Android only grants READ/WRITE_EXTERNAL_STORAGE at runtime. Without it the
+     * emulator can see neither the disk images nor the log directory, QEMU exits
+     * immediately and the app looks like it "does nothing" when Start is pressed.
+     */
+    private boolean hasStoragePermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return true;
+        }
+        try {
+            return ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+                    || ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    private void ensureStoragePermission(boolean showDialog) {
+        if (hasStoragePermission()) {
+            return;
+        }
+        if (!showDialog) {
+            if (storagePermissionAsked) {
+                return;
+            }
+            storagePermissionAsked = true;
+        }
+        try {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                            Manifest.permission.READ_EXTERNAL_STORAGE},
+                    REQ_STORAGE_PERMISSION);
+        } catch (Throwable t) {
+            Log.w(TAG, "Could not request storage permission", t);
+        }
+    }
+
+    private void promptStoragePermissionMissing() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.storage_permission_title)
+                .setMessage(R.string.storage_permission_message)
+                .setPositiveButton(R.string.storage_permission_grant, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        ensureStoragePermission(true);
+                    }
+                })
+                .setNegativeButton(R.string.storage_permission_settings, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        try {
+                            Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                            intent.setData(Uri.parse("package:" + getPackageName()));
+                            startActivity(intent);
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                })
+                .setCancelable(true)
+                .show();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != REQ_STORAGE_PERMISSION) {
+            return;
+        }
+        if (hasStoragePermission()) {
+            ToastUtils.toastShort(this, getString(R.string.storage_permission_granted));
+        } else {
+            promptStoragePermissionMissing();
+        }
+    }
+
+    /** Shows why the previous run died; the VM process cannot report it itself. */
+    private void showLastVmErrorIfAny() {
+        if (lastErrorShown || homeMode && MachineController.getInstance().isRunning()) {
+            return;
+        }
+        lastErrorShown = true;
+        String error = null;
+        try {
+            error = LimboSettingsManager.getLastVmError(this);
+        } catch (Throwable ignored) {
+        }
+        if (error == null || error.trim().length() == 0) {
+            return;
+        }
+        try {
+            LimboSettingsManager.setLastVmError(this, null);
+        } catch (Throwable ignored) {
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.last_vm_error_title)
+                .setMessage(error)
+                .setPositiveButton(R.string.last_vm_error_ok, null)
+                .setCancelable(true)
+                .show();
+    }
+
+    /** Marks a spinner as changed by code: its next onItemSelected() must be ignored. */
+    private void suppressSpinnerCallbacks(final View spinner) {
+        if (spinner == null) {
+            return;
+        }
+        Integer depth = programmaticSpinners.get(spinner);
+        programmaticSpinners.put(spinner, depth == null ? 1 : depth + 1);
+        spinner.postDelayed(new Runnable() {
+            public void run() {
+                Integer current = programmaticSpinners.get(spinner);
+                if (current == null) {
+                    return;
+                }
+                if (current <= 1) {
+                    programmaticSpinners.remove(spinner);
+                } else {
+                    programmaticSpinners.put(spinner, current - 1);
+                }
+            }
+        }, 700);
+    }
+
+    private boolean spinnerCallbacksSuppressed(View spinner) {
+        return spinner != null && programmaticSpinners.containsKey(spinner);
+    }
+
+    private void suppressAllDriveSpinners() {
+        suppressSpinnerCallbacks(mHDA);
+        suppressSpinnerCallbacks(mHDB);
+        suppressSpinnerCallbacks(mHDC);
+        suppressSpinnerCallbacks(mHDD);
+        suppressSpinnerCallbacks(mSharedFolder);
+        suppressSpinnerCallbacks(mCD);
+        suppressSpinnerCallbacks(mFDA);
+        suppressSpinnerCallbacks(mFDB);
+        suppressSpinnerCallbacks(mSD);
+        suppressSpinnerCallbacks(mKernel);
+        suppressSpinnerCallbacks(mInitrd);
     }
 
     private void disableRemovableDiskListeners() {
@@ -342,13 +504,15 @@ public class LimboActivity extends AppCompatActivity
                                              final FileType fileType) {
         spinner.setOnItemSelectedListener(new OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
-                if (getMachine() == null)
+                if (getMachine() == null || spinnerCallbacksSuppressed(spinner))
                     return;
                 String value = (String) ((ArrayAdapter<?>) spinner.getAdapter()).getItem(position);
                 if (position == 1 && driveEnable.isChecked()) {
                     browseFileType = fileType;
                     LimboFileManager.browse(LimboActivity.this, browseFileType, Config.OPEN_IMAGE_FILE_REQUEST_CODE);
                     spinner.setSelection(0);
+                } else if (position == 0) {
+                    notifyFieldChange(MachineProperty.REMOVABLE_DRIVE, new Object[]{driveName, null});
                 } else {
                     notifyFieldChange(MachineProperty.REMOVABLE_DRIVE, new Object[]{driveName, value});
                 }
@@ -453,7 +617,7 @@ public class LimboActivity extends AppCompatActivity
 
         mKernel.setOnItemSelectedListener(new OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
-                if (getMachine() == null)
+                if (getMachine() == null || spinnerCallbacksSuppressed(mKernel))
                     return;
                 String kernel = (String) ((ArrayAdapter<?>) mKernel.getAdapter()).getItem(position);
                 if (position == 0) {
@@ -473,11 +637,11 @@ public class LimboActivity extends AppCompatActivity
 
         mInitrd.setOnItemSelectedListener(new OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
-                if (getMachine() == null)
+                if (getMachine() == null || spinnerCallbacksSuppressed(mInitrd))
                     return;
                 String initrd = (String) ((ArrayAdapter<?>) mInitrd.getAdapter()).getItem(position);
                 if (position == 0) {
-                    notifyFieldChange(MachineProperty.INITRD, initrd);
+                    notifyFieldChange(MachineProperty.INITRD, null);
                 } else if (position == 1) {
                     browseFileType = FileType.INITRD;
                     LimboFileManager.browse(LimboActivity.this, browseFileType, Config.OPEN_IMAGE_FILE_REQUEST_CODE);
@@ -851,7 +1015,7 @@ public class LimboActivity extends AppCompatActivity
                                                final FileType diskFileType) {
         diskSpinner.setOnItemSelectedListener(new OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
-                if (getMachine() == null)
+                if (getMachine() == null || spinnerCallbacksSuppressed(diskSpinner))
                     return;
 
                 String hdName = (String) ((ArrayAdapter<?>) diskSpinner.getAdapter()).getItem(position);
@@ -862,6 +1026,8 @@ public class LimboActivity extends AppCompatActivity
                     browseFileType = diskFileType;
                     LimboFileManager.browse(LimboActivity.this, browseFileType, Config.OPEN_IMAGE_FILE_REQUEST_CODE);
                     diskSpinner.setSelection(0);
+                } else if (position == 0) {
+                    notifyFieldChange(MachineProperty.NON_REMOVABLE_DRIVE, new Object[]{machineDriveName, null});
                 } else {
                     notifyFieldChange(MachineProperty.NON_REMOVABLE_DRIVE, new Object[]{machineDriveName, hdName});
                 }
@@ -932,12 +1098,12 @@ public class LimboActivity extends AppCompatActivity
         mSharedFolder.setOnItemSelectedListener(new OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
 
-                if (getMachine() == null)
+                if (getMachine() == null || spinnerCallbacksSuppressed(mSharedFolder))
                     return;
 
                 String shared_folder = (String) ((ArrayAdapter<?>) mSharedFolder.getAdapter()).getItem(position);
                 if (position == 0) {
-                    notifyFieldChange(MachineProperty.SHARED_FOLDER, shared_folder);
+                    notifyFieldChange(MachineProperty.SHARED_FOLDER, null);
                 } else if (position == 1) {
                     browseFileType = FileType.SHARED_DIR;
                     LimboFileManager.browse(LimboActivity.this, browseFileType, Config.OPEN_SHARED_DIR_REQUEST_CODE);
@@ -1058,6 +1224,9 @@ public class LimboActivity extends AppCompatActivity
             setupController();
             setupHome();
             checkFirstLaunch();
+            // QEMU cannot reach the disk images without the runtime storage grant.
+            ensureStoragePermission(false);
+            showLastVmErrorIfAny();
             return;
         }
         pendingMachineName = machineExtra;
@@ -1085,6 +1254,7 @@ public class LimboActivity extends AppCompatActivity
         checkAndLoadLibs();
         restore();
         addGenericOperatingSystems();
+        showLastVmErrorIfAny();
     }
 
     private void setupAppEnvironment() {
@@ -1369,6 +1539,11 @@ public class LimboActivity extends AppCompatActivity
                     return;
                 } catch (Throwable t) {
                     logNative("external QEMU failed: " + t);
+                    try {
+                        LimboSettingsManager.setLastVmError(this,
+                                getString(R.string.qemu_load_failed) + "\n" + t);
+                    } catch (Throwable ignored) {
+                    }
                     com.max2idea.android.limbo.qemu.QemuVersionManager.setActive(this,
                             com.max2idea.android.limbo.qemu.QemuVersion.BUILTIN_ID);
                     try {
@@ -1888,12 +2063,24 @@ public class LimboActivity extends AppCompatActivity
             ToastUtils.toastShort(LimboActivity.this, getString(R.string.SelectOrCreateVirtualMachineFirst));
             return;
         }
+        // QEMU opens the images from shared storage; without the runtime grant the
+        // disk paths look missing and the VM exits before it can show anything.
+        if (!hasStoragePermission()) {
+            ToastUtils.toastLong(LimboActivity.this, getString(R.string.storage_permission_needed));
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    promptStoragePermissionMissing();
+                }
+            });
+            return;
+        }
         // focus out of edit texts to make sure they are applied to the db
         mStart.requestFocus();
 
         if (!validateFiles()) {
             return;
         }
+        warnIfNoBootMedia();
 
         try {
             createMachineDir(MachineController.getInstance().getMachineSaveDir());
@@ -1954,17 +2141,59 @@ public class LimboActivity extends AppCompatActivity
         }
     }
 
+    private boolean isRealMedia(String path) {
+        return path != null && path.length() > 0 && !"None".equals(path);
+    }
+
+    /** A machine whose drives were wiped by an old UI bug would otherwise just show a black screen. */
+    private void warnIfNoBootMedia() {
+        Machine machine = getMachine();
+        if (machine == null) {
+            return;
+        }
+        boolean hasMedia = isRealMedia(machine.getHdaImagePath())
+                || isRealMedia(machine.getHdbImagePath())
+                || isRealMedia(machine.getHdcImagePath())
+                || isRealMedia(machine.getHddImagePath())
+                || isRealMedia(machine.getCdImagePath())
+                || isRealMedia(machine.getFdaImagePath())
+                || isRealMedia(machine.getFdbImagePath())
+                || isRealMedia(machine.getSdImagePath())
+                || isRealMedia(machine.getKernel());
+        if (!hasMedia) {
+            ToastUtils.toastLong(this, getString(R.string.no_boot_media_warning));
+        }
+    }
+
     private boolean validateFiles() {
-        return FileUtils.fileValid(getMachine().getHdaImagePath())
-                && FileUtils.fileValid(getMachine().getHdbImagePath())
-                && FileUtils.fileValid(getMachine().getHdcImagePath())
-                && FileUtils.fileValid(getMachine().getHddImagePath())
-                && FileUtils.fileValid(getMachine().getFdaImagePath())
-                && FileUtils.fileValid(getMachine().getFdbImagePath())
-                && FileUtils.fileValid(getMachine().getSdImagePath())
-                && FileUtils.fileValid(getMachine().getCdImagePath())
-                && FileUtils.fileValid(getMachine().getKernel())
-                && FileUtils.fileValid(getMachine().getInitRd());
+        String[] paths = new String[]{
+                getMachine().getHdaImagePath(),
+                getMachine().getHdbImagePath(),
+                getMachine().getHdcImagePath(),
+                getMachine().getHddImagePath(),
+                getMachine().getFdaImagePath(),
+                getMachine().getFdbImagePath(),
+                getMachine().getSdImagePath(),
+                getMachine().getCdImagePath(),
+                getMachine().getKernel(),
+                getMachine().getInitRd()
+        };
+        for (String path : paths) {
+            if (path == null || path.length() == 0 || "None".equals(path)) {
+                continue;
+            }
+            if (!FileUtils.fileValid(path)) {
+                // Never fail silently: the user has to know why Start did nothing.
+                String message = getString(R.string.drive_file_missing, path);
+                ToastUtils.toastLong(this, message);
+                try {
+                    LimboSettingsManager.setLastVmError(this, message);
+                } catch (Throwable ignored) {
+                }
+                return false;
+            }
+        }
+        return true;
     }
 
     private void onStopButton(boolean exitApp) {
@@ -2800,15 +3029,16 @@ public class LimboActivity extends AppCompatActivity
         machineHydrated = true;
         maybeEnableEditors();
         if (!listenersEnabled && mScrollView != null) {
-            // Failsafe if an adapter thread never reports back: after 2.5s allow
-            // editing again even if the counter did not reach zero.
+            // Failsafe if an adapter thread never reports back: after the page has
+            // settled expose the controls again. The drive spinners ignore the
+            // synthetic selection events, so late adapters cannot wipe the config.
             mScrollView.postDelayed(new Runnable() {
                 public void run() {
                     if (!listenersEnabled) {
                         setUserPressed(true);
                     }
                 }
-            }, 2500);
+            }, 3000);
         }
         machineLoaded = false;
         syncSlidersFromMachine();
@@ -2818,14 +3048,39 @@ public class LimboActivity extends AppCompatActivity
                 && getMachine() != null
                 && pendingMachineName != null
                 && pendingMachineName.equals(getMachine().getName())) {
-            pendingAutoStart = false;
-            mStart.postDelayed(new Runnable() {
-                public void run() {
-                    mStart.performClick();
-                }
-            }, 350);
+            scheduleAutoStart();
         }
         mMachine.setEnabled(!MachineController.getInstance().isRunning());
+    }
+
+    /**
+     * Starts the machine requested from a card only after every disk adapter has
+     * settled. Clicking earlier used to run QEMU against a configuration that was
+     * still being rewritten by the adaptive spinner callbacks.
+     */
+    private void scheduleAutoStart() {
+        if (!pendingAutoStart) {
+            return;
+        }
+        autoStartAttempts++;
+        if (autoStartAttempts > 60) {
+            pendingAutoStart = false;
+            return;
+        }
+        boolean ready = machineHydrated && listenersEnabled && pendingDiskAdapters == 0
+                && getMachine() != null && pendingMachineName != null
+                && pendingMachineName.equals(getMachine().getName());
+        if (ready && !MachineController.getInstance().isRunning()) {
+            pendingAutoStart = false;
+            autoStartAttempts = 0;
+            mStart.performClick();
+            return;
+        }
+        mStart.postDelayed(new Runnable() {
+            public void run() {
+                scheduleAutoStart();
+            }
+        }, 150);
     }
 
     private void loadMachineUI() {
@@ -3359,8 +3614,10 @@ private void populateFirmware() {
 
     private void seMachineDriveValue(FileType fileType, final String diskValue) {
         Spinner spinner = getSpinner(fileType);
-        if (spinner != null)
+        if (spinner != null) {
+            suppressSpinnerCallbacks(spinner);
             SpinnerAdapter.setDiskAdapterValue(spinner, diskValue);
+        }
     }
 
     private void populateCPUs(String cpu) {
@@ -3421,6 +3678,10 @@ private void populateFirmware() {
                     public void run() {
                         SpinnerAdapter adapter = new SpinnerAdapter(LimboActivity.this, R.layout.custom_spinner_item, arraySpinner, index);
                         adapter.setDropDownViewResource(R.layout.custom_spinner_dropdown_item);
+                        // Replacing an adapter resets the selection to position 0 and
+                        // fires onItemSelected("None"); the machine must not see that
+                        // pseudo event.
+                        suppressSpinnerCallbacks(spinner);
                         spinner.setAdapter(adapter);
                         spinner.invalidate();
                         // The adapter may have been built after the machine was

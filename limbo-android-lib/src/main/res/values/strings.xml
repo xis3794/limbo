@@ -574,4 +574,14 @@
     <string name="qemu_no_packages">"No downloadable builds published yet"</string>
     <string name="qemu_retry">"Retry"</string>
     <string name="qemu_installed_badge">"Installed"</string>
+    <string name="storage_permission_title">"Storage access required"</string>
+    <string name="storage_permission_message">"Limbo needs access to shared storage to open disk images and write logs. Without it the virtual machine cannot start. Grant the permission, then press Start again."</string>
+    <string name="storage_permission_grant">"Grant"</string>
+    <string name="storage_permission_settings">"App settings"</string>
+    <string name="storage_permission_granted">"Storage access granted"</string>
+    <string name="storage_permission_needed">"Storage permission is required to start the virtual machine"</string>
+    <string name="drive_file_missing">"Cannot access %1$s"</string>
+    <string name="last_vm_error_title">"The last virtual machine failed to start"</string>
+    <string name="last_vm_error_ok">"OK"</string>
+    <string name="no_boot_media_warning">"No disk image is configured. The virtual machine may not boot; select the image again under Storage."</string>
 </resources>

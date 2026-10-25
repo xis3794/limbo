@@ -143,12 +143,12 @@ endif
 # QEMU 8.x/11.x (meson): make our hand-built pkg-config files visible
 # Also export NDK tool names so QEMU configure/meson finds them
 # (configure uses ${NM-${cross_prefix}nm} pattern: env var wins if set)
-ifeq ($(USE_QEMU_VERSION),11.1.0)
+ifneq ($(filter 10.% 11.%,$(USE_QEMU_VERSION)),)
 GLIB_DIR := glib276
 else
 GLIB_DIR := glib
 endif
-ifeq ($(filter 8.0.5 11.1.0,$(USE_QEMU_VERSION)),$(USE_QEMU_VERSION))
+ifneq ($(filter 8.0.5 10.% 11.%,$(USE_QEMU_VERSION)),)
 export PKG_CONFIG := pkg-config
 export PKG_CONFIG_PATH := $(LIMBO_JNI_ROOT)/pc
 export NM
@@ -190,7 +190,7 @@ ffi:
 	LDFLAGS="$(ARCH_LD_FLAGS) $(SYS_ROOT) -nostdlib -fno-unwind-tables "
 	$(INSTALL_FFI_LIBS)
 
-ifeq ($(USE_QEMU_VERSION),11.1.0)
+ifneq ($(filter 10.% 11.%,$(USE_QEMU_VERSION)),)
 config-glib: ndk
 	@echo "QEMU11: glib2.76 via meson (config skipped)"
 	GLIB_DIR=glib276 GLIB_VERSION=2.76.6 bash $(LIMBO_PRJ_ROOT)/scripts/gen_pc_files.sh $(LIMBO_JNI_ROOT) $(APP_ABI)
@@ -216,7 +216,7 @@ config-glib: ndk
 	bash $(LIMBO_PRJ_ROOT)/scripts/gen_pc_files.sh $(LIMBO_JNI_ROOT) $(APP_ABI)
 endif
 
-ifeq ($(USE_QEMU_VERSION),11.1.0)
+ifneq ($(filter 10.% 11.%,$(USE_QEMU_VERSION)),)
 glib: ndk
 	bash $(LIMBO_PRJ_ROOT)/scripts/build_glib276.sh $(LIMBO_JNI_ROOT) $(NDK_ROOT) $(APP_ABI)
 
@@ -237,7 +237,7 @@ glib: ndk
 endif
 
 config-libslirp:
-	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ] || [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
+	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ] || echo "$(USE_QEMU_VERSION)" | grep -qE "^(10|11)\."; then \
 		echo "Configuring libslirp for QEMU $(USE_QEMU_VERSION)"; \
 	fi
 	@if [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
@@ -245,7 +245,7 @@ config-libslirp:
 	fi
 
 libslirp:
-	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ] || [ "$(USE_QEMU_VERSION)" = "11.1.0" ]; then \
+	@if [ "$(USE_QEMU_VERSION)" = "8.0.5" ] || echo "$(USE_QEMU_VERSION)" | grep -qE "^(10|11)\."; then \
 		bash $(LIMBO_PRJ_ROOT)/scripts/build_libslirp.sh $(LIMBO_JNI_ROOT) $(NDK_ROOT) $(APP_ABI); \
 	else \
 		echo "libslirp not needed for QEMU $(USE_QEMU_VERSION)"; \
