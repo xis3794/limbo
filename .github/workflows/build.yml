@@ -60,8 +60,9 @@ jobs:
           ninja --version || true
           # glib 2.56 (QEMU 5.1/8.0.5) runs autogen.sh which needs gtkdocize
           sudo apt-get update -qq
-          sudo apt-get install -y -qq gtk-doc-tools
+          sudo apt-get install -y -qq gtk-doc-tools gettext libtool-bin
           command -v gtkdocize && echo "gtkdocize OK"
+          command -v msgfmt && echo "msgfmt OK"
           echo "tool check done"
           # patchelf >= 0.18 needed for --replace-symbol (rename _rwlock_*
           # to pthread_rwlock_* in glib/qemu so Huawei linker can resolve
