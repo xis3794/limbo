@@ -120,7 +120,11 @@ public class Logger {
         TextView textView = new TextView(activity);
         textView.setPadding(20, 20, 20, 20);
         textView.setText(body);
+        // The log view is drawn on a black background; without an explicit text
+        // color the theme's (dark) text color makes most lines invisible, which
+        // is exactly what PR #1 reported ("部分日志与背景颜色相同").
         textView.setBackgroundColor(Color.BLACK);
+        textView.setTextColor(Color.WHITE);
         textView.setTextSize(12);
         textView.setInputType(InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         textView.setSingleLine(false);

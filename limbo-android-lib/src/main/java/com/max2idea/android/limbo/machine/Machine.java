@@ -494,6 +494,7 @@ public class Machine extends Observable {
     }
 
     void setKernel(String kernel) {
+        kernel = unNone(kernel);
         if (this.kernel == null || !this.kernel.equals(kernel)) {
             this.kernel = kernel;
             setChanged();
@@ -507,12 +508,24 @@ public class Machine extends Observable {
     }
 
     void setInitRd(String initRd) {
+        initRd = unNone(initRd);
         if (this.initRd == null || !this.initRd.equals(initRd)) {
             this.initRd = initRd;
             setChanged();
             notifyChanged(MachineProperty.INITRD, initRd);
         }
 
+    }
+
+    /**
+     * Machines saved by older Limbo builds can contain the spinner placeholder
+     * "None" as a real file path. Normalising it to null on load repairs the
+     * stored value and stops QEMU from being fed "-initrd None".
+     */
+    private static String unNone(String path) {
+        if (path != null && ("None".equals(path) || path.length() == 0))
+            return null;
+        return path;
     }
 
     public String getAppend() {

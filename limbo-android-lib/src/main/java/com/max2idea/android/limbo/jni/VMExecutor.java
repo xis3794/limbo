@@ -749,20 +749,23 @@ private String getQemuLibrary() {
         }
 
         String kernel = getKernel();
-        if (kernel != null && !kernel.equals("")) {
+        // QEMU refuses -initrd/-append without -kernel ("-initrd only allowed
+        // with -kernel option"), prints that error and exits before drawing
+        // anything, so the VM just looked like it would not start at all.
+        if (kernel != null) {
             paramsList.add("-kernel");
             paramsList.add(kernel);
-        }
 
-        String initrd = getInitRd();
-        if (initrd != null && !initrd.equals("")) {
-            paramsList.add("-initrd");
-            paramsList.add(initrd);
-        }
+            String initrd = getInitRd();
+            if (initrd != null) {
+                paramsList.add("-initrd");
+                paramsList.add(initrd);
+            }
 
-        if (getMachine().getAppend() != null && !getMachine().getAppend().equals("")) {
-            paramsList.add("-append");
-            paramsList.add(getMachine().getAppend());
+            if (getMachine().getAppend() != null && !getMachine().getAppend().equals("")) {
+                paramsList.add("-append");
+                paramsList.add(getMachine().getAppend());
+            }
         }
     }
 
@@ -782,11 +785,22 @@ private String getQemuLibrary() {
     }
 
     private String getInitRd() {
-        return FileUtils.encodeDocumentFilePath(getMachine().getInitRd());
+        return filePathOrNull(getMachine().getInitRd());
     }
 
     private String getKernel() {
-        return FileUtils.encodeDocumentFilePath(getMachine().getKernel());
+        return filePathOrNull(getMachine().getKernel());
+    }
+
+    /**
+     * Older Limbo builds could store the spinners' "None" placeholder in the
+     * machine database. A literal "None" must never be handed to QEMU as a
+     * file path, otherwise the whole VM fails to start.
+     */
+    private String filePathOrNull(String path) {
+        if (path == null || path.length() == 0 || "None".equals(path))
+            return null;
+        return FileUtils.encodeDocumentFilePath(path);
     }
 
     public String getDriveFilePath(String driveFilePath) {
