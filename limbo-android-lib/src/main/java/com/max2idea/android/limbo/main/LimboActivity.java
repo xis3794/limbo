@@ -2081,6 +2081,12 @@ public class LimboActivity extends AppCompatActivity
             ToastUtils.toastShort(LimboActivity.this, getString(R.string.SelectOrCreateVirtualMachineFirst));
             return;
         }
+        // The user explicitly asked to start the VM, so any "recreated after a
+        // clean shutdown" marker must not suppress this start.
+        try {
+            LimboSettingsManager.clearVmShutdownByUser(this);
+        } catch (Throwable ignored) {
+        }
         // QEMU opens the images from shared storage; without the runtime grant the
         // disk paths look missing and the VM exits before it can show anything.
         if (!hasStoragePermission()) {

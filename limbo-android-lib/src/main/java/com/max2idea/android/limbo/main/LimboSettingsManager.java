@@ -190,6 +190,40 @@ public class LimboSettingsManager extends PreferenceActivity {
         edit.commit();
     }
 
+    /**
+     * Marks that the VM ended because the user shut it down. The VM process is
+     * killed after every run (the native libraries cannot be unloaded while the
+     * process lives), so Android recreates the SDL activity afterwards. Without
+     * this mark that recreated activity boots the VM again, which is the
+     * "关机后会重复开机" loop reported in PR #1.
+     */
+    @SuppressLint("ApplySharedPref")
+    public static void setVmShutdownByUser(Context context) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        prefs.edit().putBoolean("vmShutdownByUser", true).commit();
+    }
+
+    /** Clears the marker when the user explicitly presses Start instead. */
+    @SuppressLint("ApplySharedPref")
+    public static void clearVmShutdownByUser(Context context) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        prefs.edit().remove("vmShutdownByUser").commit();
+    }
+
+    /**
+     * True when the SDL activity was recreated by the system after a user
+     * requested shutdown. Consumes the marker so a later manual Start works.
+     */
+    @SuppressLint("ApplySharedPref")
+    public static boolean consumeVmShutdownByUser(Context context) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        if (!prefs.getBoolean("vmShutdownByUser", false)) {
+            return false;
+        }
+        prefs.edit().remove("vmShutdownByUser").commit();
+        return true;
+    }
+
     public static boolean isFirstLaunch(Context context) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         return prefs.getBoolean("firstTime" + LimboApplication.getLimboVersionString(), true);

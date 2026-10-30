@@ -170,6 +170,10 @@ public class MachineService extends Service {
                 Log.d(TAG, res);
                 //set the exit code
                 LimboSettingsManager.setExitCode(service, Config.EXIT_SUCCESS);
+                // The process is killed below, so Android will recreate the SDL
+                // activity. Remember that this was a user requested shutdown so
+                // the recreated activity does not boot the VM again (PR #1).
+                LimboSettingsManager.setVmShutdownByUser(service);
                 try {
                     LimboSettingsManager.setLastVmError(service, null);
                 } catch (Throwable ignore) {

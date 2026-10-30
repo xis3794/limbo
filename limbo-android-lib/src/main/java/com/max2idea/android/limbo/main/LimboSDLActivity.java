@@ -905,6 +905,16 @@ public class LimboSDLActivity extends SDLActivity
     //    private static Thread limboSDLThread = null;
     @Override
     protected synchronized void runSDLMain() {
+        // The VM process is killed after every run, so Android recreates this
+        // activity. If the VM was shut down on purpose, that recreation must not
+        // boot it again - otherwise every shutdown is followed by a new restart
+        // (PR #1: "在SDL画面内关机后会重复开机").
+        if (LimboSettingsManager.consumeVmShutdownByUser(this)) {
+            Log.d(TAG, "VM was shut down by the user, not starting it again");
+            quit = true;
+            notifyAll();
+            return;
+        }
         notifyAction(MachineAction.START_VM, null);
         //XXX: we hold the thread because SDLActivity will exit
         while (!quit) {
