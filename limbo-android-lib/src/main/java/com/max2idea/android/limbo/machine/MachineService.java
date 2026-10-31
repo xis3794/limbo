@@ -117,11 +117,15 @@ public class MachineService extends Service {
     }
 
     private void startVM() {
-        //XXX: wait till logging starts capturing
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        //XXX: only the logcat capture thread needs this grace period; with the
+        // capture disabled (the default) waiting a full second before starting
+        // QEMU is pure startup latency, so skip it.
+        if (Config.enableRuntimeLogcatCapture) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
 
         Log.d(TAG, "Starting VM: " + MachineController.getInstance().getMachine().getName());
@@ -158,13 +162,25 @@ public class MachineService extends Service {
                 } catch (Throwable ignore) {
                 }
                 // Also persist the QEMU error to a file: logcat gets rotated
-                // away very quickly on this device.
+                // away very quickly on this device. Kept as-is on purpose — this
+                // is a one-shot write on the error path, not a runtime cost.
+                java.io.FileOutputStream fos = null;
                 try {
-                    java.io.FileOutputStream fos = new java.io.FileOutputStream(
+                    fos = new java.io.FileOutputStream(
                             "/sdcard/Download/limbo_vm_error.txt", true);
                     fos.write(("[" + new java.util.Date() + "] " + res + "\n").getBytes());
-                    fos.close();
                 } catch (Throwable ignore) {
+                } finally {
+                    if (fos != null) {
+                        try {
+                            fos.flush();
+                        } catch (Throwable ignore) {
+                        }
+                        try {
+                            fos.close();
+                        } catch (Throwable ignore) {
+                        }
+                    }
                 }
             } else {
                 Log.d(TAG, res);
@@ -205,17 +221,32 @@ public class MachineService extends Service {
     }
 
     public void cleanUp() {
+        //XXX make sure a (opt-in) logcat capture child process & thread do not
+        // outlive the VM; no-op when runtime capture is disabled.
+        FileUtils.stopLogging();
+        // With the continuous capture off, grab one bounded logcat tail here so
+        // "view log" / "export log" still shows what the run that just ended
+        // printed. One-shot (logcat -d), no resident process, no per-line flush.
+        FileUtils.dumpFinalLogcatSnapshot();
         //XXX flush and close all file descriptors if we haven't already
         FileUtils.close_fds();
     }
 
     /** Dump /proc/self/maps to logcat (tag "LimboMaps"), split into ~3KB chunks.
      *  Called from a normal thread before loading QEMU, so logcat is safe.
-     *  Gives us libc + app lib base addresses to resolve crash backtraces. */
+     *  Gives us libc + app lib base addresses to resolve crash backtraces.
+     *
+     *  Worth keeping: it runs exactly once per VM start (not per frame / per line),
+     *  costs a few hundred KB of logcat at most, and it is the only way to map a
+     *  native crash backtrace in libc / libqemu / SDL back to load addresses once
+     *  the continuous logcat capture is off. Gate it with
+     *  Config.enableStartupMapsDump if even that is unwanted. */
     private void dumpMapsToLogcat() {
+        if (!Config.enableStartupMapsDump)
+            return;
+        java.io.BufferedReader br = null;
         try {
-            java.io.BufferedReader br = new java.io.BufferedReader(
-                    new java.io.FileReader("/proc/self/maps"));
+            br = new java.io.BufferedReader(new java.io.FileReader("/proc/self/maps"));
             StringBuilder sb = new StringBuilder();
             String line;
             int chunk = 0;
@@ -234,10 +265,16 @@ public class MachineService extends Service {
                 Log.i("LimboMaps", "--- maps chunk " + chunk + " ---");
                 Log.i("LimboMaps", sb.toString());
             }
-            br.close();
             Log.i("LimboMaps", "--- maps dump complete ---");
         } catch (Throwable t) {
             Log.e(TAG, "dumpMapsToLogcat failed: " + t);
+        } finally {
+            if (br != null) {
+                try {
+                    br.close();
+                } catch (Throwable ignore) {
+                }
+            }
         }
     }
 

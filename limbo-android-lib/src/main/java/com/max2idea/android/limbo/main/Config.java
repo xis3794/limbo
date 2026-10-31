@@ -143,6 +143,37 @@ public class Config {
     public static String notificationChannelName = "limbo";
     public static boolean showToast = false;
     public static boolean closeFileDescriptors = true;
+
+    // Continuous logcat capture (FileUtils.startLogging) spawns a resident
+    // "logcat v main" child process for the whole VM session and writes every
+    // line to the log file. That is a real CPU / IO / battery cost while the
+    // guest is running, so it is OFF by default now.
+    // Turning it on only restores the opt-in debug capture: the previous log
+    // file is never deleted or truncated while the feature is off, so
+    // "view log" / "export log" keep showing the last captured run.
+    public static boolean enableRuntimeLogcatCapture = false;
+
+    // One-shot dump of /proc/self/maps at VM start (tag "LimboMaps").
+    // Cheap (runs once, before QEMU loads) and it is what lets us resolve a
+    // crash backtrace to libc / libqemu / SDL base addresses offline, so it
+    // stays on even when the continuous capture above is disabled.
+    public static boolean enableStartupMapsDump = true;
+
+    // When the continuous capture above is off, dump a bounded tail of the logcat
+    // buffer once, when the VM stops (FileUtils.dumpFinalLogcatSnapshot). This is
+    // what keeps "view log" / "export log" useful for the run that just ended
+    // without paying for a resident logcat process.
+    public static boolean enableFinalLogcatDump = true;
+    // Bounds for the one-shot tail dump: keep the log file usable by
+    // Logger.viewLimboLog (which truncates around 50 KB) and cheap on IO.
+    public static int finalLogcatDumpLines = 800;
+    public static int finalLogcatDumpMaxBytes = 256 * 1024;
+
+    // The log file is appended to and never cleared (so the previous run stays
+    // readable). Stop writing once it exceeds this size instead of growing forever:
+    // Logger / FileUtils.getFileContents read the whole file into memory and already
+    // have an OOM FIXME. Delete cache/limbo/*-log.txt by hand to start over.
+    public static long logMaxBytes = 8 * 1024 * 1024;
     //XXX: qemu vvfat is buggy so we disable
     public static boolean enableSharedFolder = false;
 

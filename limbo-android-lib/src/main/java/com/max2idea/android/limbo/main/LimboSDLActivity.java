@@ -56,6 +56,7 @@ import androidx.appcompat.widget.Toolbar;
 import com.limbo.emu.lib.R;
 import com.max2idea.android.limbo.files.FileUtils;
 import com.max2idea.android.limbo.help.Help;
+import com.max2idea.android.limbo.keyboard.KeyMapping;
 import com.max2idea.android.limbo.keyboard.KeyboardUtils;
 import com.max2idea.android.limbo.keymapper.KeyMapManager;
 import com.max2idea.android.limbo.log.Logger;
@@ -1035,29 +1036,19 @@ public class LimboSDLActivity extends SDLActivity
     // This function will create them with a Shift Modifier
     private boolean handleMissingKeys(int keyCode, int action) {
 
-        int newKeyCode;
-        switch (keyCode) {
-            case 77:
-                newKeyCode = 9;
-                break;
-            case 81:
-                newKeyCode = 70;
-                break;
-            case 17:
-                newKeyCode = 15;
-                break;
-            case 18:
-                newKeyCode = 10;
-                break;
-            default:
-                return false;
+        // The shared key mapping knows which keys SDL's Android keymap does not
+        // handle and which key has to be pressed together with Shift to produce
+        // the wanted character (e.g. @ = Shift+2, + = Shift+=).
+        int baseKeyCode = KeyMapping.shiftedSymbolBaseKeyCode(keyCode);
+        if (baseKeyCode == 0) {
+            return false;
         }
         if (action == KeyEvent.ACTION_DOWN) {
-            sendKeyEvent(null, 59, true);
-            sendKeyEvent(null, newKeyCode, true);
+            sendKeyEvent(null, KeyEvent.KEYCODE_SHIFT_LEFT, true);
+            sendKeyEvent(null, baseKeyCode, true);
         } else {
-            sendKeyEvent(null, 59, false);
-            sendKeyEvent(null, newKeyCode, false);
+            sendKeyEvent(null, KeyEvent.KEYCODE_SHIFT_LEFT, false);
+            sendKeyEvent(null, baseKeyCode, false);
         }
         return true;
     }

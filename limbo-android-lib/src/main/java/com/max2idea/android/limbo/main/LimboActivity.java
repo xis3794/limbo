@@ -74,6 +74,7 @@ import com.max2idea.android.limbo.links.LinksManager;
 import com.max2idea.android.limbo.log.Logger;
 import com.max2idea.android.limbo.machine.ArchDefinitions;
 import com.max2idea.android.limbo.machine.BIOSImporter;
+import com.max2idea.android.limbo.machine.Dispatcher;
 import com.max2idea.android.limbo.machine.Machine;
 import com.max2idea.android.limbo.machine.Machine.FileType;
 import com.max2idea.android.limbo.machine.MachineAction;
@@ -104,6 +105,7 @@ public class LimboActivity extends AppCompatActivity
         MachineController.OnEventListener, Observer {
 
     private static final String TAG = "LimboActivity";
+    private static final long FIELD_SAVE_TIMEOUT_MS = 1500;
 
     private static final int HELP = 0;
     private static final int QUIT = 1;
@@ -593,8 +595,8 @@ public class LimboActivity extends AppCompatActivity
                 } else {
                     notifyFieldChange(MachineProperty.CPUNUM, cpuNum);
                 }
-                mDisableTSC.setChecked(position > 0 && (LimboApplication.arch == Config.Arch.x86 ||
-                        LimboApplication.arch == Config.Arch.x86_64));
+                // TSC is an independently persisted option; changing the CPU count
+                // must not overwrite the value loaded from or saved for this machine.
             }
 
             public void onNothingSelected(AdapterView<?> parentView) {
@@ -2098,8 +2100,15 @@ public class LimboActivity extends AppCompatActivity
             });
             return;
         }
-        // focus out of edit texts to make sure they are applied to the db
+        // Focus out of edit texts so their listeners enqueue the latest values,
+        // then wait for the dispatcher barrier: validation and QEMU must not see
+        // the previous configuration. A slow/failed barrier is only a warning --
+        // refusing to start would turn a transient stall into "the VM won't boot".
         mStart.requestFocus();
+        if (!Dispatcher.getInstance().awaitPendingChanges(FIELD_SAVE_TIMEOUT_MS)) {
+            android.util.Log.w(TAG, "Pending machine settings did not settle within "
+                    + FIELD_SAVE_TIMEOUT_MS + "ms, starting with the current model state");
+        }
 
         if (!validateFiles()) {
             return;

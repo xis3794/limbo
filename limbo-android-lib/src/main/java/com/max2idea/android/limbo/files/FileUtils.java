@@ -325,55 +325,255 @@ public class FileUtils {
     }
 
 
+    // State of the opt-in runtime logcat capture (see Config.enableRuntimeLogcatCapture).
+    // Volatile: started from the service thread, read/stopped from the VM exit path.
+    private static volatile Process logcatProcess = null;
+    private static volatile Thread loggerThread = null;
+    private static final Object logLock = new Object();
+
+    /**
+     * The log file is append-only now (nothing clears it, so the previous run stays
+     * readable), so guard against unbounded growth: reads of the whole file happen
+     * in-memory (getFileContents) and already carry an OOM FIXME.
+     */
+    private static boolean logFileOverCap(File logFile) {
+        try {
+            if (Config.logMaxBytes > 0 && logFile.exists() && logFile.length() > Config.logMaxBytes) {
+                Log.w(TAG, "log file " + logFile + " is over " + Config.logMaxBytes
+                        + " bytes, skipping further writes (delete the file to reset)");
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * One-shot marker so the "view log" screen explains why the log no longer grows
+     * while a VM runs. Appends only, and only when a previous log file already
+     * exists — it never creates, truncates or deletes anything.
+     */
+    private static void writeLogDisabledMarker() {
+        String path = Config.logFilePath;
+        if (path == null)
+            return;
+        File logFile = new File(path);
+        if (!logFile.exists())
+            return;
+        FileOutputStream os = null;
+        try {
+            String stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date());
+            os = new FileOutputStream(logFile, true);
+            os.write(("\n--- " + stamp + ": runtime logcat capture is disabled"
+                    + " (Config.enableRuntimeLogcatCapture=false), showing the previous run ---\n")
+                    .getBytes("UTF-8"));
+        } catch (Exception e) {
+            Log.w(TAG, "writeLogDisabledMarker: " + e);
+        } finally {
+            if (os != null) {
+                try {
+                    os.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
+
+    /**
+     * Starts the runtime logcat -> file capture, but ONLY when the user opted in via
+     * Config.enableRuntimeLogcatCapture. It is OFF by default: the capture kept a
+     * resident "logcat v main" child process plus a thread that flushed every single
+     * line to disk for the whole VM session, which is a measurable CPU / IO / battery
+     * cost while the guest is running.
+     *
+     * Disabled behaviour: return immediately and touch nothing, so the previous run's
+     * log file stays readable / exportable (readLogContents, exportLogDirect,
+     * Logger.viewLimboLog all keep working).
+     * Enabled behaviour: lines are APPENDED instead of deleting the old file first,
+     * so no log is lost either way, and every resource (Process / reader / stream)
+     * is released in a finally block.
+     */
     public static void startLogging() {
-        if (Config.logFilePath == null) {
+        if (!Config.enableRuntimeLogcatCapture) {
+            Log.d(TAG, "startLogging: runtime logcat capture disabled, keeping previous log file");
+            writeLogDisabledMarker();
+            return;
+        }
+        final String logPath = Config.logFilePath;
+        if (logPath == null) {
             Log.w(TAG, "Log file is not ready");
             return;
         }
-        Thread t = new Thread(new Runnable() {
-            public void run() {
-                FileOutputStream os = null;
-                File logFile = null;
-                try {
-                    logFile = new File(Config.logFilePath);
-                    if (logFile.exists()) {
-                        if (!logFile.delete()) {
-                            Log.w(TAG, "Could not delete previous log file!");
-                        }
-                    }
-                    logFile.createNewFile();
-                    Runtime.getRuntime().exec("logcat -c");
-                    Process process = Runtime.getRuntime().exec("logcat v main");
-                    os = new FileOutputStream(logFile);
-                    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-
-                    StringBuilder log = new StringBuilder("");
-                    String line = "";
-                    while ((line = bufferedReader.readLine()) != null) {
-                        log.setLength(0);
-                        log.append(line).append("\n");
-                        os.write(log.toString().getBytes("UTF-8"));
-                        os.flush();
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } finally {
-                    try {
-                        if (os != null) {
-                            os.flush();
-                            os.close();
-                        }
-                    } catch (IOException e) {
-
-                        e.printStackTrace();
-                    }
-
-                }
-
+        synchronized (logLock) {
+            if (loggerThread != null && loggerThread.isAlive()) {
+                Log.d(TAG, "startLogging: capture already running");
+                return;
             }
-        });
-        t.setName("LimboLogger");
-        t.start();
+            Thread t = new Thread(new Runnable() {
+                public void run() {
+                    Process process = null;
+                    FileOutputStream os = null;
+                    BufferedReader bufferedReader = null;
+                    try {
+                        File logFile = new File(logPath);
+                        if (logFileOverCap(logFile))
+                            return;
+                        File dir = logFile.getParentFile();
+                        if (dir != null && !dir.exists())
+                            dir.mkdirs();
+                        // Append mode: never destroy the previous log.
+                        os = new FileOutputStream(logFile, true);
+                        process = Runtime.getRuntime().exec("logcat v main");
+                        // Publish the handle before reading so stopLogging() can end us.
+                        logcatProcess = process;
+                        bufferedReader = new BufferedReader(
+                                new InputStreamReader(process.getInputStream()));
+                        byte[] nl = "\n".getBytes("UTF-8");
+                        String line;
+                        int sinceCapCheck = 0;
+                        while ((line = bufferedReader.readLine()) != null) {
+                            os.write(line.getBytes("UTF-8"));
+                            os.write(nl);
+                            // No per-line flush: let the FileOutputStream buffer, and flush
+                            // on exit. The old os.flush() per line was the main IO cost.
+                            if (++sinceCapCheck >= 512) {
+                                sinceCapCheck = 0;
+                                os.flush();
+                                // Stop instead of growing the file forever (see logFileOverCap).
+                                if (logFileOverCap(logFile))
+                                    break;
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.w(TAG, "logcat capture ended: " + e);
+                    } finally {
+                        if (bufferedReader != null) {
+                            try {
+                                bufferedReader.close();
+                            } catch (IOException ignored) {
+                            }
+                        }
+                        if (os != null) {
+                            try {
+                                os.flush();
+                            } catch (IOException ignored) {
+                            }
+                            try {
+                                os.close();
+                            } catch (IOException ignored) {
+                            }
+                        }
+                        if (process != null) {
+                            try {
+                                process.destroy();
+                            } catch (Exception ignored) {
+                            }
+                        }
+                        logcatProcess = null;
+                        loggerThread = null;
+                    }
+                }
+            });
+            t.setName("LimboLogger");
+            t.setDaemon(true);
+            loggerThread = t;
+            t.start();
+        }
+    }
+
+    /**
+     * Stops a running capture (no-op when it was never started, i.e. when the feature
+     * is disabled). Called from the VM exit path so the child process and thread do
+     * not outlive the service.
+     */
+    public static void stopLogging() {
+        Process p = logcatProcess;
+        Thread t = loggerThread;
+        if (p != null) {
+            try {
+                p.destroy();
+            } catch (Exception ignored) {
+            }
+        }
+        if (t != null && t != Thread.currentThread() && t.isAlive()) {
+            try {
+                t.interrupt();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /**
+     * One-shot diagnostic tail: when the continuous runtime capture is OFF, dump the
+     * tail of the logcat buffer to the log file once, when the VM stops. This keeps
+     * "view log" / "export log" useful for the run that just ended (QEMU errors, the
+     * LimboMaps dump, native crashes) without a resident logcat process or per-line
+     * flushes for the whole session.
+     *
+     * Bounded by line count (Config.finalLogcatDumpLines) and byte size, appends
+     * only, and is skipped when the continuous capture already recorded everything.
+     */
+    public static void dumpFinalLogcatSnapshot() {
+        if (!Config.enableFinalLogcatDump || Config.enableRuntimeLogcatCapture)
+            return;
+        String path = Config.logFilePath;
+        if (path == null)
+            return;
+        Process process = null;
+        BufferedReader reader = null;
+        FileOutputStream os = null;
+        try {
+            File logFile = new File(path);
+            if (logFileOverCap(logFile))
+                return;
+            File dir = logFile.getParentFile();
+            if (dir != null && !dir.exists())
+                dir.mkdirs();
+            // -d: dump the ring buffer and exit, -t: only the newest N lines.
+            process = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-t",
+                    String.valueOf(Config.finalLogcatDumpLines)});
+            reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            os = new FileOutputStream(logFile, true);
+            String stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date());
+            os.write(("\n--- " + stamp + ": logcat tail (capture disabled; last "
+                    + Config.finalLogcatDumpLines + " lines at VM stop) ---\n").getBytes("UTF-8"));
+            byte[] nl = "\n".getBytes("UTF-8");
+            String line;
+            long written = 0;
+            while ((line = reader.readLine()) != null) {
+                byte[] b = line.getBytes("UTF-8");
+                if (written + b.length > Config.finalLogcatDumpMaxBytes) {
+                    os.write("--- ... truncated ... ---".getBytes("UTF-8"));
+                    os.write(nl);
+                    break;
+                }
+                os.write(b);
+                os.write(nl);
+                written += b.length + 1;
+            }
+            os.flush();
+        } catch (Exception e) {
+            Log.w(TAG, "dumpFinalLogcatSnapshot: " + e);
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (IOException ignored) {
+                }
+            }
+            if (os != null) {
+                try {
+                    os.close();
+                } catch (IOException ignored) {
+                }
+            }
+            if (process != null) {
+                try {
+                    process.destroy();
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     public static String LoadFile(Context context, String fileName, boolean loadFromRawFolder) throws IOException {

@@ -8,9 +8,13 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
@@ -22,6 +26,14 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public class VncClient {
     private static final String TAG = "VncClient";
+
+    /** Read timeout while connecting and during the RFB handshake. */
+    private static final int HANDSHAKE_SO_TIMEOUT_MS = 20000;
+    /** Read timeout during the framebuffer loop so a half-open TCP connection
+     * cannot park the client thread forever. */
+    private static final int FRAMEBUFFER_SO_TIMEOUT_MS = 60000;
+    /** Longer timeout while the VM is still starting and may be slow to answer. */
+    private static final int STARTUP_SO_TIMEOUT_MS = 60000;
 
     public interface Listener {
         void onConnected(int width, int height);
@@ -63,7 +75,7 @@ public class VncClient {
             return;
         }
         running = true;
-        thread = new Thread(new Runnable() {
+        VncThread worker = new VncThread(new Runnable() {
             @Override
             public void run() {
                 try {
@@ -71,7 +83,7 @@ public class VncClient {
                 } catch (Exception e) {
                     if (running) {
                         Log.w(TAG, "VNC error", e);
-                        listener.onError(e.getMessage() != null ? e.getMessage() : e.toString(), true);
+                        listener.onError(describe(e), true);
                     }
                 } finally {
                     closeQuietly();
@@ -80,8 +92,9 @@ public class VncClient {
                 }
             }
         }, "VncClient");
-        thread.setDaemon(true);
-        thread.start();
+        thread = worker;
+        worker.setDaemon(true);
+        worker.start();
     }
 
     public void stop() {
@@ -91,6 +104,127 @@ public class VncClient {
         thread = null;
         if (t != null && t != Thread.currentThread()) {
             t.interrupt();
+        }
+    }
+
+    /**
+     * Runs only the RFB handshake (version, security, authentication) and
+     * stops the client once it completed. Used by VncActivity to probe for a
+     * listening QEMU VNC server without leaving a full session behind; the
+     * server sees a well-formed handshake followed by a disconnect.
+     *
+     * @return true when the server completed the handshake (authentication
+     *         included), false on timeout
+     * @throws VncConnectionPolicy.AuthFailureException server rejected the password
+     * @throws VncConnectionPolicy.ProtocolException      protocol/security negotiation failed
+     * @throws IOException                                other handshake failure
+     */
+    public boolean startAndAwaitHandshake(long timeoutMs) throws IOException {
+        final IOException[] failure = new IOException[1];
+        final CountDownLatch done = new CountDownLatch(1);
+        startHandshakeOnly(new Listener() {
+            @Override
+            public void onConnected(int width, int height) {
+                done.countDown();
+            }
+
+            @Override
+            public void onFramebuffer(Bitmap bitmap, boolean sizeChanged) {
+            }
+
+            @Override
+            public void onError(String message, boolean fatal) {
+                failure[0] = toHandshakeFailure(message, fatal);
+                done.countDown();
+            }
+
+            @Override
+            public void onDisconnected() {
+                done.countDown();
+            }
+        });
+        try {
+            if (!done.await(timeoutMs, TimeUnit.MILLISECONDS)) {
+                return false;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } finally {
+            stop();
+        }
+        if (failure[0] != null) {
+            throw failure[0];
+        }
+        return true;
+    }
+
+    private static IOException toHandshakeFailure(String message, boolean fatal) {
+        if (message == null) {
+            message = "Handshake failed";
+        }
+        if (VncConnectionPolicy.isFatalMessage(message)
+                || message.startsWith("No supported security type")) {
+            return VncConnectionPolicy.authFailed(message);
+        }
+        if (fatal) {
+            return VncConnectionPolicy.fatal(message);
+        }
+        return new IOException(message);
+    }
+
+    private void startHandshakeOnly(final Listener handshakeListener) {
+        if (thread != null) {
+            return;
+        }
+        running = true;
+        VncThread worker = new VncThread(new Runnable() {
+            @Override
+            public void run() {
+                boolean aborted = false;
+                try {
+                    socket = new Socket();
+                    socket.setTcpNoDelay(true);
+                    socket.setSoTimeout(HANDSHAKE_SO_TIMEOUT_MS);
+                    socket.connect(new InetSocketAddress(host, port), 10000);
+                    in = new DataInputStream(socket.getInputStream());
+                    out = socket.getOutputStream();
+                    int minor = handshake();
+                    int security = negotiateSecurity(minor);
+                    if (security == 2) {
+                        vncAuth();
+                    }
+                    readSecurityResult(minor, security);
+                    ((VncThread) Thread.currentThread()).markHandshakeCompleted();
+                } catch (Exception e) {
+                    aborted = true;
+                    if (running) {
+                        Log.w(TAG, "VNC probe error", e);
+                        reportHandshakeFailure(handshakeListener, e);
+                    }
+                } finally {
+                    closeQuietly();
+                    running = false;
+                    if (!aborted) {
+                        handshakeListener.onConnected(0, 0);
+                    } else if (Thread.currentThread().isInterrupted()) {
+                        handshakeListener.onDisconnected();
+                    }
+                }
+            }
+        }, "VncProbe");
+        thread = worker;
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void reportHandshakeFailure(Listener handshakeListener, Exception e) {
+        if (e instanceof VncConnectionPolicy.AuthFailureException) {
+            handshakeListener.onError(describe(e), true);
+        } else if (e instanceof VncConnectionPolicy.ProtocolException) {
+            handshakeListener.onError(describe(e), true);
+        } else {
+            handshakeListener.onError(describe(e), false);
         }
     }
 
@@ -109,9 +243,8 @@ public class VncClient {
     private void connectAndRun() throws Exception {
         socket = new Socket();
         socket.setTcpNoDelay(true);
-        socket.setSoTimeout(15000);
+        socket.setSoTimeout(HANDSHAKE_SO_TIMEOUT_MS);
         socket.connect(new InetSocketAddress(host, port), 10000);
-        socket.setSoTimeout(0);
         in = new DataInputStream(socket.getInputStream());
         out = socket.getOutputStream();
 
@@ -121,6 +254,7 @@ public class VncClient {
             vncAuth();
         }
         readSecurityResult(minor, security);
+        ((VncThread) Thread.currentThread()).markHandshakeCompleted();
 
         // ClientInit: shared desktop
         out.write(1);
@@ -132,6 +266,10 @@ public class VncClient {
         sendSetPixelFormat();
         sendSetEncodings();
 
+        // Never block forever on a stalled server: a read timeout lets the
+        // frame loop exit instead of parking the thread on a half-open socket.
+        socket.setSoTimeout(FRAMEBUFFER_SO_TIMEOUT_MS);
+
         listener.onConnected(width, height);
 
         requestUpdate(false);
@@ -142,7 +280,6 @@ public class VncClient {
         byte[] version = new byte[12];
         readFully(version, 0, 12);
         String serverVersion = new String(version, StandardCharsets.US_ASCII);
-        Log.d(TAG, "Server version " + serverVersion.trim());
         int minor;
         try {
             minor = Integer.parseInt(serverVersion.substring(8, 11));
@@ -166,7 +303,7 @@ public class VncClient {
         if (minor >= 8) {
             int count = in.readUnsignedByte();
             if (count == 0) {
-                throw new IOException(readReason());
+                throw VncConnectionPolicy.fatal(readReason());
             }
             byte[] types = new byte[count];
             readFully(types, 0, count);
@@ -187,7 +324,7 @@ public class VncClient {
             } else if (vnc) {
                 chosen = 2;
             } else {
-                throw new IOException("No supported security type");
+                throw VncConnectionPolicy.fatal("No supported security type");
             }
             out.write(chosen);
             out.flush();
@@ -195,7 +332,7 @@ public class VncClient {
         } else {
             int type = readInt32();
             if (type == 0) {
-                throw new IOException(readReason());
+                throw VncConnectionPolicy.fatal(readReason());
             }
             return type;
         }
@@ -222,7 +359,7 @@ public class VncClient {
                 reason = readReason();
             } catch (Exception ignored) {
             }
-            throw new IOException("Authentication failed" + (reason.isEmpty() ? "" : ": " + reason));
+            throw VncConnectionPolicy.authFailed(reason);
         }
     }
 
@@ -281,6 +418,11 @@ public class VncClient {
                 type = in.readUnsignedByte();
             } catch (EOFException e) {
                 return;
+            } catch (SocketTimeoutException e) {
+                if (running) {
+                    throw new IOException("Connection stalled (no data from server)", e);
+                }
+                return;
             }
             switch (type) {
                 case 0:
@@ -299,7 +441,9 @@ public class VncClient {
                     readServerCutText();
                     break;
                 default:
-                    throw new IOException("Unsupported server message " + type);
+                    // Not retryable: the server speaks something we do not
+                    // understand, reconnecting would loop on the same message.
+                    throw VncConnectionPolicy.fatal("Unsupported server message " + type);
             }
         }
     }
@@ -345,7 +489,37 @@ public class VncClient {
                         changed = true;
                     }
                 } else {
-                    throw new IOException("Unsupported encoding " + encoding);
+                    // Skip the rectangle instead of tearing the connection
+                    // down: some servers send encodings we never requested.
+                    Log.w(TAG, "Skipping rectangle with unsupported encoding "
+                            + encoding + " (" + w + "x" + h + " at " + x + "," + y + ")");
+                    switch (encoding) {
+                        case 1: // CopyRect
+                            skip(4);
+                            break;
+                        case 2: // RRE
+                            skip(4);
+                            int subRects = readInt32();
+                            skip(12 + subRects * 12);
+                            break;
+                        case 16: // ZRLE
+                            int zrleLen = readInt32();
+                            skip(zrleLen);
+                            break;
+                        case -32: // Cursor
+                            skip(w * h * 4 + ((w + 7) / 8) * 4 * ((h + 7) / 8));
+                            break;
+                        case -239: // DesktopName
+                            int nameLen = readInt32();
+                            skip(nameLen);
+                            break;
+                        default:
+                            // Unknown or variable-length layout (Hextile, TRLE,
+                            // tight, ...): the stream is no longer parseable,
+                            // fail instead of corrupting the next rectangle.
+                            throw VncConnectionPolicy.fatal(
+                                    "Unsupported encoding " + encoding);
+                    }
                 }
             }
         }
@@ -485,6 +659,9 @@ public class VncClient {
     private String readReason() throws IOException {
         int length = readInt32();
         if (length <= 0 || length > 4096) {
+            // Malformed or absent reason (e.g. a 3.3 server that sent only the
+            // 4-byte failure code): never consume bytes beyond the result, the
+            // stream would be desynchronised for the caller.
             return "";
         }
         byte[] buf = new byte[length];
@@ -515,5 +692,34 @@ public class VncClient {
             r = (r << 1) | ((b >> i) & 1);
         }
         return r & 0xff;
+    }
+
+    /**
+     * Worker thread whose handshake progress {@link VncConnectionPolicy}
+     * inspects to classify EOFs from a still-starting QEMU listener.
+     */
+    static final class VncThread extends Thread {
+        private volatile boolean handshakeCompleted;
+
+        VncThread(Runnable target, String name) {
+            super(target, name);
+        }
+
+        void markHandshakeCompleted() {
+            handshakeCompleted = true;
+        }
+
+        boolean isHandshakeCompleted() {
+            return handshakeCompleted;
+        }
+    }
+
+    private static String describe(Exception e) {
+        if (e instanceof VncConnectionPolicy.AuthFailureException) {
+            // Marker prefix read by VncActivity to recognise auth failures
+            // without matching substrings in translated/user-supplied text.
+            return "Authentication failed: " + e.getMessage();
+        }
+        return e.getMessage() != null ? e.getMessage() : e.toString();
     }
 }

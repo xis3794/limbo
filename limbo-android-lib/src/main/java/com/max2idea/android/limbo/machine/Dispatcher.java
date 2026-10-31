@@ -18,10 +18,16 @@ Copyright (C) Max Kastanas 2012
  */
 package com.max2idea.android.limbo.machine;
 
+import android.util.Log;
+
 import com.max2idea.android.limbo.main.ViewListener;
 
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Dispatcher is responsible for routing user actions and field changes to the backend machine
@@ -123,9 +129,44 @@ public class Dispatcher implements ViewListener {
         dispatcher.submit(new Runnable() {
             @Override
             public void run() {
-                requestFieldChange(property, value);
+                // A rejected field must never poison the queue: this executor is
+                // single-threaded and serves every later change (including the
+                // start-up barrier below), so an escaping exception used to make
+                // the whole configuration appear unsavable.
+                try {
+                    requestFieldChange(property, value);
+                } catch (Throwable t) {
+                    Log.w(TAG, "Ignoring failed field change " + property, t);
+                }
             }
         });
+    }
+
+    /**
+     * Waits for all changes submitted before this call to reach the machine and its observers.
+     * The single-worker queue makes a completed no-op task a barrier for earlier submissions.
+     *
+     * @return false if interrupted, the barrier fails, or the timeout expires
+     */
+    public boolean awaitPendingChanges(long timeoutMs) {
+        Future<?> barrier = dispatcher.submit(new Runnable() {
+            @Override
+            public void run() {
+                // No-op barrier.
+            }
+        });
+        try {
+            barrier.get(timeoutMs, TimeUnit.MILLISECONDS);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (ExecutionException e) {
+            return false;
+        } catch (TimeoutException e) {
+            barrier.cancel(false);
+            return false;
+        }
     }
 
     private void requestFieldChange(MachineProperty property, Object value) {
@@ -144,6 +185,7 @@ public class Dispatcher implements ViewListener {
                 break;
             case MEDIA_INTERFACE:
                 setDriveMediaInterface(value);
+                break;
             case SOUNDCARD:
                 getMachine().setSoundCard(convertString(property, value));
                 break;
@@ -218,6 +260,7 @@ public class Dispatcher implements ViewListener {
                 break;
             case EXTRA_PARAMS:
                 getMachine().setExtraParams(convertString(property,value));
+                break;
             default:
                 throw new RuntimeException("Umapped UI field: " + property);
         }
