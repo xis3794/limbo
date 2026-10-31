@@ -388,6 +388,51 @@ else:
     log('[FAIL] util/meson.build: pattern not found')
 
 # ---------------------------------------------------------------------------
+# 7. Built-in DES so VNC password auth works on QEMU 10.x/11.x
+#
+#    The Android build passes --disable-gnutls --disable-nettle, so QEMU 10/11
+#    fall back to crypto/cipher-stub.c.inc whose qcrypto_cipher_supports()
+#    always returns false. ui/vnc.c checks
+#    qcrypto_cipher_supports(QCRYPTO_CIPHER_ALGO_DES, ECB) when the "password"
+#    option is given and exits with
+#        "Cipher backend does not support DES algorithm"
+#    before the VM starts - i.e. "-vnc ...,password=on" killed the VM, which
+#    the user saw as "VNC crashes immediately".
+#
+#    QEMU <= 5.1 shipped crypto/desrfb.c (public-domain D3DES); QEMU 6.x
+#    dropped it. compat/des/cipher-limbo-des.c.inc carries that DES core plus
+#    a QCryptoCipherDriver, and is included instead of the stub below.
+#    Only DES/ECB is provided, everything else keeps failing like the stub.
+# ---------------------------------------------------------------------------
+_des_src = os.path.join(JNI, 'compat', 'des', 'cipher-limbo-des.c.inc')
+if not os.path.isfile(_des_src):
+    _des_src = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            '..', 'limbo-android-lib', 'src', 'main', 'jni',
+                            'compat', 'des', 'cipher-limbo-des.c.inc')
+if os.path.isfile(_des_src):
+    with open(_des_src, 'r', encoding='utf-8') as _f:
+        _des = _f.read()
+    write('crypto/cipher-limbo-des.c.inc', _des)
+    log('[OK] crypto/cipher-limbo-des.c.inc installed (built-in DES)')
+
+    _cipher_c = read('crypto/cipher.c')
+    if 'cipher-limbo-des.c.inc' in _cipher_c:
+        log('[SKIP] crypto/cipher.c already includes the built-in DES backend')
+    else:
+        # The #else branch is the "no crypto library" case; 10.2 spells it
+        # CONFIG_GNUTLS, 11.x CONFIG_GNUTLS_CRYPTO - only the include matters.
+        _old_inc = '#include "cipher-stub.c.inc"'
+        if _old_inc in _cipher_c:
+            _cipher_c = _cipher_c.replace(
+                _old_inc, '#include "cipher-limbo-des.c.inc"', 1)
+            write('crypto/cipher.c', _cipher_c)
+            log('[OK] crypto/cipher.c: built-in DES instead of cipher-stub')
+        else:
+            log('[FAIL] crypto/cipher.c: cipher-stub.c.inc include not found')
+else:
+    log('[FAIL] compat/des/cipher-limbo-des.c.inc missing (built-in DES skipped)')
+
+# ---------------------------------------------------------------------------
 print('=' * 60)
 print('fix_qemu11.py done. Summary:')
 for l in LOGS:
