@@ -39,6 +39,13 @@ public final class QemuVersionManager {
             "https://raw.githubusercontent.com/xis3794/limbo-qemu/main/catalog.json";
     private static final String DIR_NAME = "qemu";
 
+    /**
+     * Capability table of the bundled QEMU build. Generated at build time from
+     * tools/qemu_capabilities.json (see the CI workflow); the downloadable
+     * packages carry the same block inside their manifest.json.
+     */
+    private static final String CAPABILITIES_ASSET = "qemu_capabilities.json";
+
     public interface Progress {
         void onProgress(long bytes);
     }
@@ -79,7 +86,126 @@ public final class QemuVersionManager {
                 "内置 QEMU " + version,
                 "随应用打包的 QEMU 版本，无法删除。",
                 "arm64-v8a", "libqemu-system-x86_64.so",
-                new ArrayList<String>(), null, true);
+                new ArrayList<String>(), null, true,
+                builtinCapabilities(context, version));
+    }
+
+    /**
+     * The bundled build has no manifest.json, so its capability table ships as
+     * an asset generated from tools/qemu_capabilities.json at build time.
+     */
+    private static QemuVersion.Capabilities builtinCapabilities(Context context, String version) {
+        QemuVersion.Capabilities cached = sBuiltinCapabilities;
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            String json = FileUtils.LoadFile(context, CAPABILITIES_ASSET, false);
+            JSONObject series = new JSONObject(json).optJSONObject("series");
+            if (series == null) {
+                sBuiltinCapabilities = null;
+                return null;
+            }
+            QemuVersion.Capabilities parsed = parseCapabilities(closestEntry(series, version));
+            sBuiltinCapabilities = parsed;
+            return parsed;
+        } catch (Exception e) {
+            Log.d(TAG, "No capability table for the built-in QEMU " + version + ": " + e);
+            sBuiltinCapabilities = null;
+            return null;
+        }
+    }
+
+    /**
+     * Picks the table entry whose version is closest to {@code version}: an
+     * exact match first, then the nearest build of the same minor series, then
+     * of the same major series. Patch releases share the machine/CPU list of
+     * their series (11.1.0 vs 11.1.2), so this stays accurate.
+     */
+    private static JSONObject closestEntry(JSONObject series, String version) {
+        JSONObject exact = series.optJSONObject(version);
+        if (exact != null) {
+            return exact;
+        }
+        int wanted = versionCode(version);
+        String[] parts = version.split("\\.");
+        String major = parts[0];
+        String minor = parts.length > 1 ? major + "." + parts[1] : major;
+
+        JSONObject bestSameMinor = null;
+        int bestMinorDistance = Integer.MAX_VALUE;
+        JSONObject bestSameMajor = null;
+        int bestMajorDistance = Integer.MAX_VALUE;
+        java.util.Iterator<String> it = series.keys();
+        while (it.hasNext()) {
+            String key = it.next();
+            JSONObject entry = series.optJSONObject(key);
+            if (entry == null) {
+                continue;
+            }
+            int code = entry.optInt("version_code", versionCode(key));
+            int distance = Math.abs(code - wanted);
+            if ((key.equals(minor) || key.startsWith(minor + ".")) && distance < bestMinorDistance) {
+                bestMinorDistance = distance;
+                bestSameMinor = entry;
+            }
+            if ((key.equals(major) || key.startsWith(major + ".")) && distance < bestMajorDistance) {
+                bestMajorDistance = distance;
+                bestSameMajor = entry;
+            }
+        }
+        if (bestSameMinor != null) {
+            return bestSameMinor;
+        }
+        return bestSameMajor;
+    }
+
+    /** "8.0.5" -> 80005. */
+    private static int versionCode(String version) {
+        try {
+            String[] parts = version.trim().split("\\.");
+            int major = Integer.parseInt(parts[0]);
+            int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            int patch = parts.length > 2 ? Integer.parseInt(parts[2]) : 0;
+            return major * 10000 + minor * 100 + patch;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private static volatile QemuVersion.Capabilities sBuiltinCapabilities;
+
+    /** Reads the optional "capabilities" block of a package manifest. */
+    private static QemuVersion.Capabilities parseCapabilities(JSONObject caps) {
+        if (caps == null) {
+            return null;
+        }
+        List<String> machineTypes = readArray(caps, "machine_types");
+        List<String> cpus = readArray(caps, "cpus");
+        if (machineTypes.isEmpty() && cpus.isEmpty()) {
+            return null;
+        }
+        return new QemuVersion.Capabilities(
+                caps.optInt("version_code", 0),
+                machineTypes, cpus,
+                readArray(caps, "vga"),
+                readArray(caps, "soundcards"),
+                readArray(caps, "nic_cards"),
+                readArray(caps, "displays"));
+    }
+
+    private static List<String> readArray(JSONObject o, String key) {
+        List<String> out = new ArrayList<>();
+        JSONArray arr = o.optJSONArray(key);
+        if (arr != null) {
+            for (int i = 0; i < arr.length(); i++) {
+                String value = arr.optString(i, null);
+                if (value != null && value.length() > 0) {
+                    out.add(value);
+                }
+            }
+        }
+        return out;
     }
 
     public static List<QemuVersion> getInstalled(Context context) {
@@ -140,21 +266,36 @@ public final class QemuVersionManager {
             return null;
         }
         return new QemuVersion(id, version, series, name, description, abi,
-                qemuLib, loadOrder, dir, false);
+                qemuLib, loadOrder, dir, false, parseCapabilities(o.optJSONObject("capabilities")));
     }
 
     public static QemuVersion getActive(Context context) {
         String id = prefs(context).getString(KEY_ACTIVE, QemuVersion.BUILTIN_ID);
+        QemuVersion cached = sActiveCache;
+        if (cached != null && cached.id.equals(id)) {
+            return cached;
+        }
         for (QemuVersion v : getInstalled(context)) {
             if (v.id.equals(id)) {
+                sActiveCache = v;
                 return v;
             }
         }
         setActive(context, QemuVersion.BUILTIN_ID);
-        return builtin(context);
+        QemuVersion builtin = builtin(context);
+        sActiveCache = builtin;
+        return builtin;
     }
 
+    /**
+     * The config screen asks for the active build several times while it builds
+     * its spinners, and every answer re-read manifest.json from disk. Keep the
+     * last one; {@link #setActive}, install and delete all invalidate it.
+     */
+    private static volatile QemuVersion sActiveCache;
+
     public static void setActive(Context context, String id) {
+        sActiveCache = null;
         prefs(context).edit().putString(KEY_ACTIVE, id == null ? QemuVersion.BUILTIN_ID : id).apply();
     }
 
@@ -197,6 +338,7 @@ public final class QemuVersionManager {
             if (version == null) {
                 throw new IOException("安装后校验失败");
             }
+            sActiveCache = null;
             return version;
         } finally {
             if (temp.exists()) {
@@ -230,6 +372,7 @@ public final class QemuVersionManager {
         }
         File dir = new File(root(context), safe);
         boolean deleted = dir.isDirectory() && deleteRecursive(dir);
+        sActiveCache = null;
         if (deleted && id.equals(prefs(context).getString(KEY_ACTIVE, ""))) {
             setActive(context, QemuVersion.BUILTIN_ID);
         }
