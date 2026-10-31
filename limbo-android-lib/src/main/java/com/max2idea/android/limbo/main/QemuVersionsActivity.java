@@ -127,6 +127,21 @@ public class QemuVersionsActivity extends AppCompatActivity {
         note.setLayoutParams(noteParams);
         headCard.addView(note);
 
+        // What the active core can emulate. Packages built with tools/package_qemu.py
+        // carry this table in manifest.json; without it the config screen falls
+        // back to the static APK lists and may offer models the core rejects.
+        TextView capsInfo = new TextView(this);
+        capsInfo.setText(active.machineTypeCount() > 0
+                ? getString(R.string.qemu_capabilities, active.machineTypeCount(), active.cpuCount())
+                : getString(R.string.qemu_manifest_note));
+        capsInfo.setTextColor(mutedColor);
+        capsInfo.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        LinearLayout.LayoutParams capsParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        capsParams.topMargin = dp(6);
+        capsInfo.setLayoutParams(capsParams);
+        headCard.addView(capsInfo);
+
         // Installed versions
         addSection(R.string.qemu_installed);
         for (QemuVersion version : QemuVersionManager.getInstalled(this)) {
@@ -205,6 +220,19 @@ public class QemuVersionsActivity extends AppCompatActivity {
         summaryParams.topMargin = dp(3);
         summary.setLayoutParams(summaryParams);
         card.addView(summary);
+
+        if (version.machineTypeCount() > 0) {
+            TextView caps = new TextView(this);
+            caps.setText(getString(R.string.qemu_capabilities,
+                    version.machineTypeCount(), version.cpuCount()));
+            caps.setTextColor(mutedColor);
+            caps.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            LinearLayout.LayoutParams capsParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            capsParams.topMargin = dp(2);
+            caps.setLayoutParams(capsParams);
+            card.addView(caps);
+        }
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);

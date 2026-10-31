@@ -574,6 +574,10 @@
     <string name="qemu_no_packages">"No downloadable builds published yet"</string>
     <string name="qemu_retry">"Retry"</string>
     <string name="qemu_installed_badge">"Installed"</string>
+    <string name="qemu_capabilities">"Package declares %1$d machine types · %2$d CPUs"</string>
+    <string name="qemu_manifest_note">"This package has no capability list: the settings fall back to the built-in lists. Rebuild it with tools/package_qemu.py to get a per-version list."</string>
+    <string name="machine_type_unsupported">"Machine type \"%1$s\" is not offered by QEMU %2$s; a compatible model will be used instead."</string>
+    <string name="cpu_unsupported">"CPU \"%1$s\" is not offered by QEMU %2$s; the default will be used instead."</string>
     <string name="storage_permission_title">"Storage access required"</string>
     <string name="storage_permission_message">"Limbo needs access to shared storage to open disk images and write logs. Without it the virtual machine cannot start. Grant the permission, then press Start again."</string>
     <string name="storage_permission_grant">"Grant"</string>

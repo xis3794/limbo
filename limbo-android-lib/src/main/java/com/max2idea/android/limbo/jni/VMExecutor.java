@@ -404,8 +404,15 @@ private String getQemuLibrary() {
         //FIXME: something is wrong with quoting that doesn't let sparc qemu find the cpu def
         // for now we remove the cpu drop downlist items for sparc
         String cpu = getMachine().getCpu();
-        if (getMachine().getCpu() != null && getMachine().getCpu().contains(" "))
-            cpu = "'" + getMachine().getCpu() + "'"; // XXX: needed for sparc cpu names
+        String supported = supportedCpu(cpu);
+        if (supported != cpu) {
+            Log.w(TAG, "CPU \"" + cpu + "\" is not supported by QEMU "
+                    + LimboApplication.getQemuVersionString()
+                    + ", using " + (supported != null ? "\"" + supported + "\"" : "the default"));
+            cpu = supported;
+        }
+        if (cpu != null && cpu.contains(" "))
+            cpu = "'" + cpu + "'"; // XXX: needed for sparc cpu names
 
         //XXX: we disable tsc feature for x86 since some guests are kernel panicking
         // if the cpu has not specified by user we use the internal qemu32/64
@@ -620,7 +627,100 @@ private String getQemuLibrary() {
             }
             machineType = sb.toString();
         }
+        // Last line of defence: the package says what it can emulate. If the
+        // stored value is not in that list (machine created with another QEMU
+        // build, e.g. "pc-q35-11.1" while QEMU 8 is active) QEMU would print
+        // "unsupported machine type" and exit(1), so fall back to the family's
+        // unversioned alias instead of failing the whole start.
+        if (machineType != null && (LimboApplication.arch == Config.Arch.x86_64
+                || LimboApplication.arch == Config.Arch.x86)) {
+            String fallback = compatibleMachineType(machineType);
+            if (fallback != null) {
+                Log.w(TAG, "Machine type \"" + machineType + "\" is not supported by QEMU "
+                        + LimboApplication.getQemuVersionString() + ", using \"" + fallback + "\"");
+                machineType = fallback;
+            }
+        }
         return machineType;
+    }
+
+    /**
+     * Returns the CPU model to use, or {@code cpu} unchanged when the active
+     * QEMU package accepts it. Packages list the x86 models they were built
+     * with, so e.g. a model added in QEMU 9 is dropped to "Default" (which maps to "max")
+     * on a QEMU 8 package instead of making QEMU exit with
+     * "unable to find CPU model".
+     */
+    private String supportedCpu(String cpu) {
+        if (cpu == null || cpu.length() == 0 || cpu.equals("Default")) {
+            return cpu;
+        }
+        if (LimboApplication.arch != Config.Arch.x86_64
+                && LimboApplication.arch != Config.Arch.x86) {
+            return cpu;
+        }
+        com.max2idea.android.limbo.qemu.QemuVersion.Capabilities caps =
+                com.max2idea.android.limbo.machine.ArchDefinitions
+                        .getActiveCapabilities(LimboApplication.getInstance());
+        if (caps == null || !caps.hasCpus()) {
+            return cpu;
+        }
+        String bare = cpu;
+        int comma = bare.indexOf(',');
+        if (comma >= 0) {
+            bare = bare.substring(0, comma);
+        }
+        if (caps.supportsCpu(bare)) {
+            return cpu;
+        }
+        // Prefer a generic model this build really has over "Default", which
+        // maps to "-cpu max" and may be missing from very old packages.
+        if (caps.supportsCpu("max")) {
+            return "max";
+        }
+        if (caps.supportsCpu("qemu64")) {
+            return "qemu64";
+        }
+        return "Default";
+    }
+
+    /**
+     * Returns the closest machine model the active QEMU package supports, or
+     * null when the stored value is fine (or nothing is known about the build).
+     */
+    private String compatibleMachineType(String machineType) {
+        if (machineType == null) {
+            return null;
+        }
+        com.max2idea.android.limbo.qemu.QemuVersion.Capabilities caps =
+                com.max2idea.android.limbo.machine.ArchDefinitions
+                        .getActiveCapabilities(LimboApplication.getInstance());
+        if (caps == null || !caps.hasMachineTypes()) {
+            return null;
+        }
+        // Strip the ",acpi=off"-style properties added above.
+        int comma = machineType.indexOf(',');
+        String bare = comma >= 0 ? machineType.substring(0, comma) : machineType;
+        String suffix = comma >= 0 ? machineType.substring(comma) : "";
+        if (caps.supportsMachineType(bare)) {
+            return null;
+        }
+        String base = bare.toLowerCase(java.util.Locale.ROOT);
+        String replacement;
+        if (base.contains("q35")) {
+            replacement = "q35";
+        } else if (base.contains("i440fx") || base.startsWith("pc")
+                || base.startsWith("isapc")) {
+            replacement = "pc";
+        } else if (base.startsWith("microvm")) {
+            replacement = "microvm";
+        } else {
+            replacement = "pc";
+        }
+        if (!caps.supportsMachineType(replacement)) {
+            replacement = caps.machineTypes.get(0);
+        }
+        return replacement + suffix;
     }
 
     /**

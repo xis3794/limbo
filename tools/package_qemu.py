@@ -80,6 +80,31 @@ def needed(patchelf, path):
         return []
 
 
+def load_capabilities(version, table_path):
+    """Capability block for this build, read from tools/qemu_capabilities.json.
+
+    The app filters the machine-type / CPU pickers with this block so that a
+    downloaded build only offers the models it was actually compiled with
+    (QEMU 8 has no "pc-q35-11.1", QEMU 11 dropped most old versioned aliases).
+    Returns None when the version is not in the table - old packages simply
+    keep the static APK lists.
+    """
+    if not os.path.isfile(table_path):
+        return None
+    with open(table_path) as f:
+        table = json.load(f)
+    series = table.get("series", {})
+    entry = series.get(version)
+    if entry is not None:
+        return entry
+    # Patch releases share the machine/CPU list of their minor series.
+    prefix = version.split(".")[0]
+    for key, value in series.items():
+        if key == prefix or key.startswith(prefix + "."):
+            return value
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("libs")
@@ -91,6 +116,8 @@ def main():
     ap.add_argument("--patchelf", default="patchelf")
     ap.add_argument("--id", default=None)
     ap.add_argument("--description", default=None)
+    ap.add_argument("--capabilities", default=None,
+                    help="qemu_capabilities.json (default: next to this script)")
     args = ap.parse_args()
 
     series = args.series or args.version.split(".")[0]
@@ -145,6 +172,15 @@ def main():
         "qemu_lib": args.qemu_lib,
         "load_order": load_order,
     }
+    caps_path = args.capabilities or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "qemu_capabilities.json")
+    capabilities = load_capabilities(args.version, caps_path)
+    if capabilities:
+        manifest["capabilities"] = capabilities
+    else:
+        print("WARNING: no capabilities entry for QEMU %s in %s; the app will fall "
+              "back to its static machine-type / CPU lists." % (args.version, caps_path),
+              file=sys.stderr)
     with open(os.path.join(pkg, "manifest.json"), "w") as f:
         json.dump(manifest, f, indent=2)
 

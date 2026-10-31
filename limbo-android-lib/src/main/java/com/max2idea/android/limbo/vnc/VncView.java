@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -21,6 +22,28 @@ public class VncView extends View {
 
     public VncView(Context context) {
         super(context);
+        init();
+    }
+
+    /*
+     * XML layouts instantiate custom views through the (Context, AttributeSet)
+     * constructor. Without it LayoutInflater throws
+     *   InflateException: Binary XML file line #9: Error inflating class
+     *   com.max2idea.android.limbo.vnc.VncView
+     * and the process dies as soon as VncActivity does setContentView(), which
+     * is exactly what "tap 进入画面 with Display=VNC" used to do.
+     */
+    public VncView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    public VncView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+    private void init() {
         setBackgroundColor(Color.BLACK);
     }
 

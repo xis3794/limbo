@@ -3659,14 +3659,43 @@ private void populateFirmware() {
     private void populateMachineType(String machineType) {
         ArrayList<String> arrList = ArchDefinitions.getMachineTypeValues(this);
 
+        // A package installed from an older QEMU (or a machine created with the
+        // bundled one) can hold a model the active core has never heard of.
+        // Keep it visible instead of silently showing the wrong entry, but let
+        // the summary warn about it - VMExecutor rewrites it to a safe alias
+        // before QEMU ever sees it.
+        boolean unsupported = false;
+        if (machineType != null && machineType.length() > 0) {
+            int found = indexOfIgnoreCase(arrList, machineType);
+            if (found < 0) {
+                arrList.add(machineType);
+                unsupported = true;
+            }
+        }
+
         ArrayAdapter<String> machineTypeAdapter = new ArrayAdapter<>(this, R.layout.custom_spinner_item, arrList);
         machineTypeAdapter.setDropDownViewResource(R.layout.custom_spinner_dropdown_item);
         mMachineType.setAdapter(machineTypeAdapter);
 
         mMachineType.invalidate();
-        int pos = machineTypeAdapter.getPosition(machineType);
+        int pos = indexOfIgnoreCase(arrList, machineType);
         mMachineType.setSelection(Math.max(pos, 0));
+        if (unsupported) {
+            ToastUtils.toastLong(this, getString(R.string.machine_type_unsupported, machineType,
+                    LimboApplication.getQemuVersionString()));
+        }
+    }
 
+    private static int indexOfIgnoreCase(ArrayList<String> list, String value) {
+        if (value == null) {
+            return -1;
+        }
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).equalsIgnoreCase(value)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private void populateUI() {

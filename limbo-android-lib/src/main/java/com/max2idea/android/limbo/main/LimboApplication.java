@@ -78,9 +78,40 @@ public class LimboApplication extends Application {
                     + Integer.parseInt(qemuVersionParts[2]);
             Log.d(TAG, "Qemu Version: " + qemuVersionString);
             Log.d(TAG, "Qemu Version Number: " + qemuVersion);
+
+            // An installed package replaces the bundled core, so every version
+            // dependent decision (machine types, CPUs, removed command line
+            // options) has to follow the version that will actually run.
+            try {
+                com.max2idea.android.limbo.qemu.QemuVersion active =
+                        com.max2idea.android.limbo.qemu.QemuVersionManager.getActive(context);
+                if (active != null && !active.isBuiltin()) {
+                    qemuVersionString = active.version;
+                    qemuVersion = active.capabilities != null && active.capabilities.versionCode > 0
+                            ? active.capabilities.versionCode
+                            : parseVersionCode(active.version, qemuVersion);
+                    Log.d(TAG, "Active external QEMU: " + qemuVersionString
+                            + " (" + qemuVersion + ")");
+                }
+            } catch (Throwable t) {
+                Log.w(TAG, "Could not resolve the active QEMU build: " + t);
+            }
         } catch (Exception e) {
             e.printStackTrace();
             ToastUtils.toastShort(context, context.getString(R.string.VersionInfoFailedToast) + e);
+        }
+    }
+
+    /** "8.0.5" -> 80005; keeps {@code fallback} when the string is unusable. */
+    private static int parseVersionCode(String version, int fallback) {
+        try {
+            String[] parts = version.trim().split("\\.");
+            int major = Integer.parseInt(parts[0]);
+            int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            int patch = parts.length > 2 ? Integer.parseInt(parts[2]) : 0;
+            return major * 10000 + minor * 100 + patch;
+        } catch (Exception e) {
+            return fallback;
         }
     }
 

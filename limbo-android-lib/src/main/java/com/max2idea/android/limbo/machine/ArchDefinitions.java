@@ -24,6 +24,8 @@ import com.limbo.emu.lib.R;
 import com.max2idea.android.limbo.install.Installer;
 import com.max2idea.android.limbo.main.Config;
 import com.max2idea.android.limbo.main.LimboApplication;
+import com.max2idea.android.limbo.qemu.QemuVersion;
+import com.max2idea.android.limbo.qemu.QemuVersionManager;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,13 +38,23 @@ public class ArchDefinitions {
 
     public static ArrayList<String> getSoundcards(Context context) {
         ArrayList<String> commonSoundcards = new ArrayList<>();
+        QemuVersion.Capabilities caps = getActiveCapabilities(context);
+        if (caps != null && !caps.soundcards.isEmpty()) {
+            commonSoundcards.addAll(caps.soundcards);
+            return commonSoundcards;
+        }
         commonSoundcards.addAll(Arrays.asList(Installer.getAttrs(context, R.raw.common_soundcards)));
         return commonSoundcards;
     }
 
     public static ArrayList<String> getNetworkDevices(Context context) {
         ArrayList<String> commonNetworkCards = new ArrayList<>();
-        commonNetworkCards.addAll(Arrays.asList(Installer.getAttrs(context, R.raw.common_nic_cards)));
+        QemuVersion.Capabilities caps = getActiveCapabilities(context);
+        if (caps != null && !caps.nicCards.isEmpty()) {
+            commonNetworkCards.addAll(caps.nicCards);
+        } else {
+            commonNetworkCards.addAll(Arrays.asList(Installer.getAttrs(context, R.raw.common_nic_cards)));
+        }
 
         ArrayList<String> networkCards = new ArrayList<>();
         switch (LimboApplication.arch) {
@@ -142,6 +154,12 @@ public class ArchDefinitions {
 
     public static ArrayList<String> getCpuValues(Context context) {
         ArrayList<String> arrList = new ArrayList<>();
+        QemuVersion.Capabilities caps = getActiveCapabilities(context);
+        if (caps != null && caps.hasCpus()) {
+            arrList.add("Default");
+            arrList.addAll(caps.cpus);
+            return arrList;
+        }
         switch (LimboApplication.arch) {
             case x86:
             case x86_64:
@@ -171,26 +189,57 @@ public class ArchDefinitions {
         return arrList;
     }
 
+    /**
+     * Capability table of the QEMU build that will actually run the VM, or null
+     * for packages that do not describe themselves.
+     *
+     * A downloadable QEMU build only knows the machine models / CPU models of
+     * its own release: QEMU 8 has no "pc-q35-11.1" and QEMU 11 dropped most of
+     * the old versioned aliases. Offering the full APK list for every build made
+     * it possible to pick a value the running core rejects ("unsupported
+     * machine type" -> exit(1) -> the VM never starts), so everything the config
+     * screen offers is filtered through this table.
+     */
+    public static QemuVersion.Capabilities getActiveCapabilities(Context context) {
+        if (LimboApplication.arch != Config.Arch.x86
+                && LimboApplication.arch != Config.Arch.x86_64) {
+            // The published packages are x86_64-softmmu builds; their machine /
+            // CPU lists say nothing about the ARM, PPC or SPARC cores.
+            return null;
+        }
+        try {
+            QemuVersion active = QemuVersionManager.getActive(context);
+            return active != null ? active.capabilities : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** Machine models the active QEMU build accepts, "Default" first. */
     public static ArrayList<String> getMachineTypeValues(Context context) {
         ArrayList<String> arrList = new ArrayList<>();
+        arrList.add("Default");
+        QemuVersion.Capabilities caps = getActiveCapabilities(context);
+        if (caps != null && caps.hasMachineTypes()) {
+            arrList.addAll(caps.machineTypes);
+            return arrList;
+        }
         switch (LimboApplication.arch) {
             case x86:
             case x86_64:
-                arrList.add("Default");
                 arrList.addAll(Arrays.asList(Installer.getAttrs(context, R.raw.x86_machine_types)));
                 break;
             case arm:
             case arm64:
+                arrList.remove(0);
                 arrList.addAll(Arrays.asList(Installer.getAttrs(context, R.raw.arm_machine_types)));
                 break;
             case ppc:
             case ppc64:
-                arrList.add("Default");
                 arrList.addAll(Arrays.asList(Installer.getAttrs(context, R.raw.ppc_machine_types)));
                 break;
             case sparc:
             case sparc64:
-                arrList.add("Default");
                 arrList.addAll(Arrays.asList(Installer.getAttrs(context, R.raw.sparc_machine_types)));
                 break;
         }
