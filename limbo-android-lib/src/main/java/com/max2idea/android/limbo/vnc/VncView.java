@@ -102,6 +102,13 @@ public class VncView extends View {
         if (client == null || client.getWidth() <= 0) {
             return true;
         }
+        // While the soft keyboard is up, the first touch on the framebuffer
+        // dismisses it instead of also being sent to the guest: otherwise every
+        // attempt to close the keyboard would click inside the remote desktop.
+        if (imeVisible && event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            hideIme();
+            return true;
+        }
         float x = (event.getX() - dst.left) / Math.max(dst.width(), 1f) * client.getWidth();
         float y = (event.getY() - dst.top) / Math.max(dst.height(), 1f) * client.getHeight();
         int bx = Math.max(0, Math.min(client.getWidth() - 1, Math.round(x)));
