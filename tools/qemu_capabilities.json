@@ -424,7 +424,7 @@
         "VNC",
         "SDL"
       ],
-      "vnc_password": false
+      "vnc_password": true
     },
     "11.1.2": {
       "version_code": 110102,
@@ -560,7 +560,7 @@
         "VNC",
         "SDL"
       ],
-      "vnc_password": false
+      "vnc_password": true
     }
   }
 }
