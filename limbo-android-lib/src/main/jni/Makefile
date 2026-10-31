@@ -155,7 +155,15 @@ GLIB_DIR := glib
 endif
 ifneq ($(filter 8.0.5 10.% 11.%,$(USE_QEMU_VERSION)),)
 export PKG_CONFIG := pkg-config
+# The optional stacks (libepoxy / GTK4 / virglrenderer) live in prefixes of
+# their own; QEMU's meson finds them through this search path. Restricting the
+# dirs to what we build keeps the runner's host gtk/virgl out of the cross build.
+ifneq ($(filter true,$(USE_GTK) $(USE_VIRGL)),)
+export PKG_CONFIG_PATH := $(OPT_PC_DIRS)
+export PKG_CONFIG_LIBDIR := $(OPT_PC_DIRS)
+else
 export PKG_CONFIG_PATH := $(LIMBO_JNI_ROOT)/pc
+endif
 export NM
 export AR
 export STRIP
@@ -305,6 +313,69 @@ clean-pixman:
 	-cd $(LIMBO_JNI_ROOT)/pixman && $(MAKE) distclean
 	-cd $(LIMBO_JNI_ROOT)/pixman && $(MAKE) clean
 
+# ---------------------------------------------------------------------------
+# Optional display stacks (USE_GTK / USE_VIRGL, both default false)
+#
+# Order matters and is encoded in the dependencies:
+#   libepoxy     -> GL/EGL loader, needs nothing but the NDK sysroot
+#   GTK4         -> needs glib/pixman/libffi (from `deps`) + libepoxy
+#   virglrenderer-> needs libepoxy (EGL platform) + glib; it does NOT need GTK
+#
+# They are built through the scripts/ helpers so the same recipe works from a
+# local shell and from CI, and so the meson cross files stay out of the Makefile.
+# ---------------------------------------------------------------------------
+
+config-epoxy: ndk
+	@if [ ! -d "$(LIMBO_JNI_ROOT)/libepoxy" ]; then \
+		echo "ERROR: libepoxy sources missing (CI step 'Download GTK4 / libepoxy /"\n\
+		      "virglrenderer sources' fetches them)"; exit 1; \
+	fi
+
+epoxy: ndk config-epoxy
+	bash $(LIMBO_PRJ_ROOT)/scripts/build_libepoxy.sh $(LIMBO_JNI_ROOT) $(NDK_ROOT) $(APP_ABI)
+
+clean-epoxy:
+	-rm -rf "$(LIMBO_JNI_ROOT)/libepoxy/build" "$(EPOXY_INSTALL_DIR)"
+	-rm -f "$(LIMBO_JNI_ROOT)/epoxy-cross.txt"
+
+config-gtk: ndk epoxy
+	@if [ "$(APP_ABI)" != "arm64-v8a" ]; then \
+		echo "ERROR: the GDK android backend only builds for arm64-v8a (got $(APP_ABI))"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(LIMBO_JNI_ROOT)/gtk4android" ]; then \
+		echo "ERROR: gtk4android sources missing (CI step 'Download GTK4 /"\n\
+		      "libepoxy / virglrenderer sources' fetches them)"; exit 1; \
+	fi
+
+gtk: ndk epoxy
+	bash $(LIMBO_PRJ_ROOT)/scripts/build_gtk4android.sh $(LIMBO_JNI_ROOT) $(NDK_ROOT) $(APP_ABI)
+	# GTK ships a dozen inter-dependent .so files; the script puts them in
+	# obj/local so the normal INSTALL_LIBS -> jniLibs chain packs them into the
+	# APK next to libqemu-system-*.so (QEMU dlopens libgtk-4.so from there).
+
+clean-gtk:
+	-rm -rf "$(LIMBO_JNI_ROOT)/gtk4android/build-android" "$(LIMBO_JNI_ROOT)/gtk4android/install-android"
+	-rm -rf "$(LIMBO_JNI_ROOT)/gtk4android/build-android.subprojects-save"
+	-rm -f "$(LIMBO_JNI_ROOT)/gtk4-cross.txt"
+
+config-virgl: ndk epoxy
+	@if [ ! -d "$(LIMBO_JNI_ROOT)/virglrenderer" ]; then \
+		echo "ERROR: virglrenderer sources missing (CI step 'Download GTK4 /"\n\
+		      "libepoxy / virglrenderer sources' fetches them)"; exit 1; \
+	fi
+
+virgl: ndk epoxy
+	USE_VIRGL_VENUS=$(USE_VIRGL_VENUS) \
+		bash $(LIMBO_PRJ_ROOT)/scripts/build_virglrenderer.sh $(LIMBO_JNI_ROOT) $(NDK_ROOT) $(APP_ABI)
+	# Keep the renderer next to the qemu lib in obj/local as well: the DT_NEEDED
+	# rewrite below and the APK both work off that directory.
+	cp -Lf $(VIRGL_INSTALL_DIR)/lib/libvirglrenderer.so* $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/ || true
+
+clean-virgl:
+	-rm -rf "$(LIMBO_JNI_ROOT)/virglrenderer/build-android" "$(LIMBO_JNI_ROOT)/virglrenderer/install-android"
+	-rm -f "$(LIMBO_JNI_ROOT)/virgl-cross.txt"
+
 _qemu: ndk
 	cd $(LIMBO_JNI_ROOT)/qemu && $(MAKE) all -j $(BUILD_THREADS) BUILD_GUEST=$(BUILD_GUEST) CFLAGS="$(ARCH_CFLAGS)"
 
@@ -322,11 +393,45 @@ clean-qemu:
 	-rm -rf $(LIMBO_APP_SPARC)/assets/roms/*
 
 config-deps: ndk config-ffi config-glib config-pixman
+	@if [ "$(USE_GTK)" = "true" ] || [ "$(USE_VIRGL)" = "true" ]; then \
+		$(MAKE) config-epoxy; \
+	fi
 
-deps: ndk ffi glib pixman 
+deps: ndk ffi glib pixman
+	@if [ "$(USE_VIRGL)" = "true" ]; then $(MAKE) virgl; fi
+	@if [ "$(USE_GTK)" = "true" ]; then $(MAKE) gtk; fi
 
 _build-qemu: ndk 
 	make _qemu
+	# Optional stacks: Android's linker resolves a DT_NEEDED entry by the exact
+	# file name, and meson/ld default to the SONAME-versioned spelling
+	# (libepoxy.so.0, libgtk-4.so.1, ...) while the APK only ships the
+	# unversioned lib<name>.so. Rewrite the dependency entries in place; all
+	# the replacements shorten the string, so dynstr never moves (see
+	# scripts/fix_needed.py for why that matters on Huawei devices).
+	@if [ "$(USE_GTK)" = "true" ] || [ "$(USE_VIRGL)" = "true" ]; then \
+		for so in $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/*.so; do \
+			python3 $(LIMBO_PRJ_ROOT)/scripts/fix_needed.py "$$so" \
+				libepoxy.so.0=libepoxy.so \
+				libgtk-4.so.1=libgtk-4.so \
+				libgdk_pixbuf-2.0.so.0=libgdk_pixbuf-2.0.so \
+				libcairo.so.2=libcairo.so \
+				libcairo-gobject.so.2=libcairo-gobject.so \
+				libpango-1.0.so.0=libpango-1.0.so \
+				libpangocairo-1.0.so.0=libpangocairo-1.0.so \
+				libpangoft2-1.0.so.0=libpangoft2-1.0.so \
+				libharfbuzz.so.0=libharfbuzz.so \
+				libfreetype.so.6=libfreetype.so \
+				libfontconfig.so.1=libfontconfig.so \
+				libfribidi.so.0=libfribidi.so \
+				libgraphene-1.0.so.0=libgraphene-1.0.so \
+				libgdk-4.so.1=libgdk-4.so \
+				libgsk-4.so.1=libgsk-4.so \
+				libvirglrenderer.so.1=libvirglrenderer.so \
+				2>/dev/null || true; \
+		done; \
+		echo "[OK] DT_NEEDED rewritten to unversioned GTK/GL library names"; \
+	fi
 	# QEMU 8.x: meson/ninja outputs the emulator as a shared lib into qemu/build/
 	# copy it into the NDK obj dir (file IO redirect is done via -Wl,--wrap in
 	# fix_qemu805.py, no objcopy --redefine-sym needed for .so)

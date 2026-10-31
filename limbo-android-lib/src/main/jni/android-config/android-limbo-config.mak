@@ -64,3 +64,46 @@ USE_AAUDIO ?= true
 # Enable KVM
 # Note: KVM headers are available only for android-21 platform and above
 USE_KVM ?= true
+
+# ---------------------------------------------------------------------------
+# Optional display stacks.  Both are off by default so a plain build keeps
+# exactly the libraries it always had; CI (and a local `make limbo`) turns
+# them on with `export USE_GTK=true` / `export USE_VIRGL=true`.
+#
+#   USE_GTK     GTK4 display backend (gtk4android): `-display gtk`.
+#               Requires QEMU 11.0.0, the only tree the GTK4 port applies to,
+#               and an arm64-v8a host (the GDK android backend targets aarch64).
+#   USE_VIRGL   OpenGL/virglrenderer: `-Dopengl=enabled`,
+#               `-Dvirglrenderer=enabled`, virtio-gpu-gl-pci and ,gl=on.
+#               Needs USE_GTK too: both link the libepoxy that gtk4android
+#               installs, and a GL-only build would be an untested combination.
+#
+# USE_VIRGL_VENUS additionally enables the Vulkan (venus) backend.
+# ---------------------------------------------------------------------------
+USE_GTK ?= false
+USE_VIRGL ?= false
+USE_VIRGL_VENUS ?= false
+
+# The GDK android backend needs the API 31 NDK (AMotionEvent_fromJava and
+# AKeyEvent_fromJava are only exported by libandroid.so from API 31 on).
+GTK_ANDROID_API ?= 31
+
+# virglrenderer / gtk4android install prefixes (kept next to their sources so
+# `make clean-*` can wipe them).
+VIRGL_URL ?= https://gitlab.freedesktop.org/virgl/virglrenderer.git
+VIRGL_TAG ?= 1.1.0
+EPOXY_URL ?= https://github.com/anholt/libepoxy/archive/refs/tags/1.5.10.tar.gz
+GTK4_URL ?= https://github.com/SlugAir928437/gtk4android.git
+GTK4_BRANCH ?= master
+
+EPOXY_INSTALL_DIR := $(LIMBO_JNI_ROOT)/libepoxy/install
+GTK_INSTALL_DIR := $(LIMBO_JNI_ROOT)/gtk4android/install-android
+VIRGL_INSTALL_DIR := $(LIMBO_JNI_ROOT)/virglrenderer/install-android
+
+# pkg-config search path for the optional stacks: the libs we build ourselves
+# must be found, and nothing from the host may leak in.
+OPT_PC_DIRS := $(LIMBO_JNI_ROOT)/pc:$(EPOXY_INSTALL_DIR)/lib/pkgconfig:$(GTK_INSTALL_DIR)/lib/pkgconfig:$(VIRGL_INSTALL_DIR)/lib/pkgconfig
+
+$(info USE_GTK = $(USE_GTK))
+$(info USE_VIRGL = $(USE_VIRGL))
+$(info USE_VIRGL_VENUS = $(USE_VIRGL_VENUS))

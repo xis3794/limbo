@@ -12,6 +12,7 @@ on:
           - '5.1.0'
           - '8.0.5'
           - '10.2.0'
+          - '11.0.0'
           - '11.1.0'
           - '11.1.2'
       build_host:
@@ -30,6 +31,16 @@ on:
         options:
           - 'x86_64-softmmu'
           - 'aarch64-softmmu'
+      use_gtk:
+        description: 'Build the GTK4 display backend (ships libgtk-4.so in the APK)'
+        required: true
+        default: true
+        type: boolean
+      use_virgl:
+        description: 'Build GPU acceleration (opengl + virglrenderer -> virtio-gpu-gl-pci)'
+        required: true
+        default: true
+        type: boolean
 
 jobs:
   build:
@@ -41,9 +52,51 @@ jobs:
       QEMU_VER: ${{ github.event.inputs.qemu_version || '11.1.2' }}
       BUILD_HOST: ${{ github.event.inputs.build_host || 'arm64-v8a' }}
       BUILD_GUEST: ${{ github.event.inputs.build_guest || 'x86_64-softmmu' }}
+      # Boolean inputs arrive as the strings 'true'/'false'. Normalising them
+      # here (rather than inside a step) keeps every later step free to just
+      # test $USE_GTK without repeating the parsing.
+      INPUT_USE_GTK: ${{ github.event.inputs.use_gtk || 'true' }}
+      INPUT_USE_VIRGL: ${{ github.event.inputs.use_virgl || 'true' }}
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve build options
+        run: |
+          # The GTK4 display backend and the OpenGL/virglrenderer stack are
+          # built from a QEMU tree the Android patches apply to. The GTK4 port
+          # (patches/qemu-11.0.0-gtk4-android.patch) rewrites ui/gtk.c onto the
+          # GTK4 API and switches meson's dependency from gtk+-3.0 to gtk4;
+          # upstream 11.1.x restructured ui/gtk.c (GMenu + GPtrArray console
+          # management) so that patch conflicts there and cannot be ported
+          # mechanically. Rather than ship a half-patched engine, the two
+          # optional stacks are pinned to a version they are known to apply
+          # and build against, and refused elsewhere.
+          GTK_VIRGL_QEMU_VER="11.0.0"
+
+          USE_GTK="$INPUT_USE_GTK"
+          USE_VIRGL="$INPUT_USE_VIRGL"
+          [ "$USE_GTK" = "true" ] || USE_GTK=false
+          [ "$USE_VIRGL" = "true" ] || USE_VIRGL=false
+
+          if [ "$USE_GTK" = "true" ] || [ "$USE_VIRGL" = "true" ]; then
+            if [ "$QEMU_VER" != "$GTK_VIRGL_QEMU_VER" ]; then
+              echo "::warning::GTK4/GPU are only built against QEMU $GTK_VIRGL_QEMU_VER (requested $QEMU_VER); disabling both for this build."
+              USE_GTK=false
+              USE_VIRGL=false
+            fi
+          fi
+
+          # GPU acceleration is GTK-independent in principle, but gtk4android's
+          # libepoxy is one of its links and the CI builds them together; keep
+          # the pair consistent so a --disable-gtk build never links half a GL
+          # stack.
+          if [ "$USE_GTK" != "true" ]; then USE_VIRGL=false; fi
+
+          echo "USE_GTK=$USE_GTK"   >> $GITHUB_ENV
+          echo "USE_VIRGL=$USE_VIRGL" >> $GITHUB_ENV
+          echo "GTK_VIRGL_QEMU_VER=$GTK_VIRGL_QEMU_VER" >> $GITHUB_ENV
+          echo "resolved: QEMU=$QEMU_VER host=$BUILD_HOST guest=$BUILD_GUEST gtk=$USE_GTK virgl=$USE_VIRGL"
 
       - name: Check preinstalled tools (no apt needed)
         run: |
@@ -131,6 +184,33 @@ jobs:
             echo "dtc/libfdt v1.7.0 installed as qemu/dtc/"
           fi
 
+      - name: Download GTK4 / libepoxy / virglrenderer sources
+        if: env.USE_GTK == 'true' || env.USE_VIRGL == 'true'
+        run: |
+          cd limbo-android-lib/src/main/jni
+
+          # libepoxy: the GL/EGL function loader QEMU's CONFIG_OPENGL and
+          # virglrenderer both link against. Built on its own so GPU
+          # acceleration does not depend on the GTK stack building.
+          wget -q --timeout=60 --tries=5 --retry-connrefused --waitretry=5 \
+            https://github.com/anholt/libepoxy/archive/refs/tags/1.5.10.tar.gz -O libepoxy.tar.gz
+          tar xzf libepoxy.tar.gz && mv libepoxy-1.5.10 libepoxy && rm libepoxy.tar.gz
+
+          # virglrenderer: host side renderer behind virtio-gpu-gl-pci.
+          git clone --depth 1 --branch 1.1.0 --single-branch \
+            https://gitlab.freedesktop.org/virgl/virglrenderer.git virglrenderer
+
+          if [ "$USE_GTK" = "true" ]; then
+            # gtk4android: the GTK tree carrying the GDK "android" backend.
+            # Its meson wraps (cairo/pango/harfbuzz/freetype/fontconfig/...) are
+            # fetched by meson itself during `meson setup`.
+            git clone --depth 1 --branch master --single-branch \
+              https://github.com/SlugAir928437/gtk4android.git gtk4android
+            echo ">> gtk4android: $(git -C gtk4android rev-parse --short HEAD)"
+          fi
+
+          echo ">> libepoxy/libvirglrenderer sources ready"
+
       - name: Apply patches & prepare QEMU
         run: |
           cd limbo-android-lib/src/main/jni
@@ -174,6 +254,11 @@ jobs:
           export BUILD_HOST="$BUILD_HOST"
           export BUILD_GUEST="$BUILD_GUEST"
           export USE_QEMU_VERSION="$QEMU_VER"
+          # Optional display stacks, resolved by the "Resolve build options"
+          # step (GTK4/GPU are pinned to the QEMU version their patches apply to).
+          export USE_GTK="$USE_GTK"
+          export USE_VIRGL="$USE_VIRGL"
+          export USE_VIRGL_VENUS="${USE_VIRGL_VENUS:-false}"
           if [ "$QEMU_VER" = "8.0.5" ]; then
             export PKG_CONFIG_PATH="$PWD/pc"
           fi
@@ -250,6 +335,63 @@ jobs:
             exit 1
           fi
           echo "OK: BIOS assets present"
+
+      - name: Verify GTK4 / GPU artifacts (fail fast)
+        if: env.USE_GTK == 'true' || env.USE_VIRGL == 'true'
+        run: |
+          # The Java side decides whether to offer the GTK backend and the
+          # virtio-gpu-gl devices purely by the presence of these libraries
+          # (see DisplayBackendProbe). If the native build produced them but
+          # they were not carried into jniLibs, the APK would silently keep
+          # offering only VNC/SDL -- or worse, offer GTK and then fail at
+          # start up. Fail here instead of shipping that.
+          OBJ=limbo-android-lib/src/main/jni/../obj/local/$BUILD_HOST
+          LIBS=limbo-android-x86/src/main/jniLibs/$BUILD_HOST
+          MISSING=0
+
+          check() {
+            if [ -f "$OBJ/$1" ]; then
+              echo "obj:     $1"
+            else
+              echo "::error::native build did not produce $OBJ/$1"
+              MISSING=1
+            fi
+          }
+
+          [ "$USE_VIRGL" = "true" ] && check libepoxy.so
+          [ "$USE_VIRGL" = "true" ] && check libvirglrenderer.so
+          [ "$USE_GTK" = "true" ]   && check libgtk-4.so
+
+          echo "=== QEMU DT_NEEDED ==="
+          readelf -d "$OBJ/libqemu-system-x86_64.so" 2>/dev/null | grep NEEDED | sed 's/^/  /' || true
+          if [ "$USE_VIRGL" = "true" ]; then
+            readelf -d "$OBJ/libqemu-system-x86_64.so" 2>/dev/null | grep -q 'libepoxy' \
+              || { echo "::error::libqemu-system-x86_64.so does not link libepoxy (CONFIG_OPENGL was not enabled)"; MISSING=1; }
+            readelf -d "$OBJ/libqemu-system-x86_64.so" 2>/dev/null | grep -q 'libvirglrenderer' \
+              || { echo "::error::libqemu-system-x86_64.so does not link libvirglrenderer (CONFIG_VIRGL was not enabled)"; MISSING=1; }
+          fi
+          if [ "$USE_GTK" = "true" ]; then
+            readelf -d "$OBJ/libqemu-system-x86_64.so" 2>/dev/null | grep -q 'libgtk-4' \
+              || { echo "::error::libqemu-system-x86_64.so does not link libgtk-4 (CONFIG_GTK was not enabled)"; MISSING=1; }
+            [ -f "$OBJ/virglrenderer/install-android/lib/pkgconfig/virglrenderer.pc" ] || true
+          fi
+
+          echo "=== jniLibs (goes into the APK) ==="
+          ls -la "$LIBS" 2>/dev/null | head -40 || echo "(empty)"
+          if [ "$USE_GTK" = "true" ] && [ ! -f "$LIBS/libgtk-4.so" ]; then
+            echo "::error::libgtk-4.so missing from jniLibs (it would not ship in the APK)"
+            MISSING=1
+          fi
+          if [ "$USE_VIRGL" = "true" ] && [ ! -f "$LIBS/libvirglrenderer.so" ]; then
+            echo "::error::libvirglrenderer.so missing from jniLibs (it would not ship in the APK)"
+            MISSING=1
+          fi
+
+          if [ "$MISSING" = "1" ]; then
+            echo "::error::GTK4/GPU artifacts incomplete; aborting (would ship an APK that cannot use them)"
+            exit 1
+          fi
+          echo "OK: GTK4/GPU artifacts present"
 
       - name: Build APK with Gradle 7.0.2
         env:

@@ -76,7 +76,15 @@ USB_LIB = --disable-libusb
 #NET = --enable-slirp 
 
 #DISPLAY
+# GTK is enabled only when the GTK4 stack was built (USE_GTK=true, QEMU 11.0.0
+# plus patches/qemu-11.0.0-gtk4-android.patch which rewrites QEMU's meson
+# dependency from gtk+-3.0 to gtk4).  Without the patch -Dgtk-enabled would
+# silently fail to find gtk+-3.0 andCONFIG_GTK stays 0.
+ifeq ($(USE_GTK),true)
+DISPLAY = --disable-curses --disable-cocoa --enable-gtk
+else
 DISPLAY = --disable-curses --disable-cocoa --disable-gtk
+endif
 
 #VNC 
 VNC +=  --enable-vnc
@@ -125,7 +133,15 @@ endif
 MISC += --disable-rbd --disable-lzo  --disable-snappy 
 MISC += --disable-seccomp --disable-bzip2
 MISC += --disable-vte
+# OpenGL / virglrenderer: enables CONFIG_OPENGL (epoxy-based GL offload),
+# the virtio-gpu-gl-* devices and ",gl=on" for the SDL/GTK display backends.
+# virglrenderer must be installed first (see the `virgl` Makefile target):
+# meson only looks for its .pc file.
+ifeq ($(USE_VIRGL),true)
+MISC += --enable-opengl --enable-virglrenderer
+else
 MISC += --disable-opengl
+endif
 MISC += --disable-werror
 MISC += --disable-gnutls
 MISC += --disable-nettle

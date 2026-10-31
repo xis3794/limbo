@@ -14,6 +14,7 @@ Usage: python3 scripts/fix_qemu11.py <jni_root>
 """
 import os
 import re
+import subprocess
 import sys
 
 JNI = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else '.')
@@ -431,6 +432,144 @@ if os.path.isfile(_des_src):
             log('[FAIL] crypto/cipher.c: cipher-stub.c.inc include not found')
 else:
     log('[FAIL] compat/des/cipher-limbo-des.c.inc missing (built-in DES skipped)')
+
+# ---------------------------------------------------------------------------
+# 8. GTK4 / OpenGL (virgl) Android display patches
+#
+#    patches/qemu-11.1.2-android-egl.patch
+#        ui/egl-helpers.c: bring up a surfaceless GLES3 context through the
+#        system libEGL/EGL_DEFAULT_DISPLAY.  Android has no render node and no
+#        desktop GL, so without this egl_init() fails and both the GTK gl=on
+#        path and virglrenderer's get_egl_display callback stay dead.
+#
+#    patches/qemu-11.1.2-gtk-gl.patch
+#        ui/gtk.c: teach the gl=on setup that GtkGLArea is also the way to go
+#        on Android (GDK_WINDOWING_ANDROID), plus the EGL-only dma-buf helpers
+#        and the SPICE GL scanout guards in include/ui/{egl-helpers,spice-display}.h,
+#        ui/egl-helpers.c and ui/spice-core.c.
+#
+#    Both patches are mandatory when USE_GTK or USE_VIRGL is on: QEMU is
+#    configured with -Dopengl=enabled and (with GTK) -Dgtk=enabled, and an
+#    unpatched tree either fails to compile or produces a display backend with
+#    no OpenGL.  A patch that does not apply is reported as an explicit WARN
+#    (never silently skipped) and, while the option is enabled, also as FAIL
+#    so that CI stops instead of shipping a half-patched QEMU.
+# ---------------------------------------------------------------------------
+def _opt(name):
+    return os.environ.get(name, '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+def _patch_run(path, extra):
+    with open(path, 'rb') as _f:
+        return subprocess.run(['patch', '-p1', '-f'] + extra,
+                              cwd=QEMU, stdin=_f,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+def _patch_state(path):
+    """'fresh', 'applied' or 'conflict' for a patch file.
+
+    GNU patch has no --check; --dry-run is the check.  The reversed dry run is
+    tried *first*: with -f (assume the patch is not reversed) an already
+    applied additive hunk still matches forward, so testing forward first would
+    apply the patch a second time and duplicate the new code.
+    """
+    if _patch_run(path, ['--dry-run', '-R']).returncode == 0:
+        return 'applied'
+    if _patch_run(path, ['--dry-run']).returncode == 0:
+        return 'fresh'
+    return 'conflict'
+
+def apply_android_display_patch(name, required):
+    """Apply one display patch, or report exactly why it could not be applied."""
+    path = os.path.join(JNI, 'patches', name)
+    if not os.path.isfile(path):
+        log('[WARN] patches/%s missing - GTK/GL adaptation NOT applied' % name)
+        if required:
+            log('[FAIL] %s absent but USE_GTK/USE_VIRGL is enabled' % name)
+        return
+    state = _patch_state(path)
+    if state == 'applied':
+        log('[SKIP] %s already applied' % name)
+        return
+    if state == 'fresh':
+        r = _patch_run(path, ['--no-backup-if-mismatch'])
+        if r.returncode == 0:
+            log('[OK] %s applied' % name)
+            return
+        out = r.stdout.decode('utf-8', 'replace')
+        log('[WARN] %s: apply failed after a successful --dry-run' % name)
+    else:
+        out = _patch_run(path, ['--dry-run']).stdout.decode('utf-8', 'replace')
+        log('[WARN] %s does not apply to this QEMU tree' % name)
+    # patch prints "checking file <f>" before each file and "Hunk #n FAILED"
+    # for every hunk it cannot place: list exactly which ones were rejected.
+    current = None
+    rejected = []
+    for line in out.splitlines():
+        text = line.strip()
+        if text.startswith('checking file ') or text.startswith('patching file '):
+            current = text.split(' ', 2)[2]
+            print('      | %s' % text)
+        elif 'FAILED' in text or "can't find file" in text:
+            where = current or 'unknown file'
+            rejected.append('%s: %s' % (where, text))
+            print('      | %s: %s' % (where, text))
+        elif text:
+            print('      | %s' % text)
+    if rejected:
+        log('[WARN] rejected hunks: %s' % '; '.join(rejected))
+    else:
+        log('[WARN] %s: patch made no change (no hunk placed)' % name)
+    if required:
+        log('[FAIL] patches/%s not applied (USE_GTK/USE_VIRGL enabled)' % name)
+
+_want_gtk = _opt('USE_GTK')
+_want_virgl = _opt('USE_VIRGL')
+if _want_gtk or _want_virgl:
+    print('Limbo: USE_GTK=%s USE_VIRGL=%s -> applying Android GL display patches'
+          % (_want_gtk, _want_virgl))
+
+    # The patch set depends on the QEMU release, because the GTK4 port rewrites
+    # ui/gtk.c wholesale and that file was restructured upstream in 11.1.
+    #
+    #   11.0.0  the full GTK4 port (qemu-11.0.0-gtk4-android.patch): GTK4 API
+    #           throughout ui/gtk.c, meson dependency gtk+-3.0 -> gtk4, the
+    #           Android GtkGLArea branch, and the EGL-only dma-buf helpers.
+    #   other   only ui/egl-helpers.c (qemu-11.1.2-android-egl.patch) plus the
+    #           GtkGLArea/dma-buf guards (qemu-11.1.2-gtk-gl.patch).  Those do
+    #           NOT convert QEMU to GTK4: upstream still asks for gtk+-3.0, so
+    #           -Dgtk=enabled stays off there and GTK is simply not built.
+    _qemu_dir = QEMU
+    _ver = ''
+    try:
+        with open(os.path.join(_qemu_dir, 'VERSION'), 'r', encoding='utf-8') as _vf:
+            _ver = _vf.read().strip()
+    except Exception:
+        _ver = os.environ.get('USE_QEMU_VERSION', '').strip()
+    print('Limbo: QEMU VERSION=%s' % _ver)
+
+    if _ver == '11.0.0':
+        # Order matters: the GTK4 port rewrites meson.build and ui/gtk.c, and
+        # the GL scanout helpers build on the egl_init()/dma-buf code it moves.
+        apply_android_display_patch('qemu-11.0.0-gtk4-android.patch', True)
+        apply_android_display_patch('qemu-11.0.0-android-egl.patch', True)
+        apply_android_display_patch('qemu-11.0.0-android-gl-scanout.patch', True)
+        if _want_gtk:
+            # QEMU only compiles the GTK display when it finds gtk4.pc; a
+            # gtk+-3.0-only tree silently yields CONFIG_GTK=0 and the app then
+            # offers a backend QEMU reports as unknown.
+            _meson = read('meson.build')
+            if "dependency('gtk4'" in _meson:
+                log('[OK] meson.build: GTK dependency is gtk4')
+            else:
+                log('[FAIL] meson.build: GTK dependency is not gtk4 (GTK backend will be absent)')
+        log('[OK] GTK4/GL patch set applied for QEMU 11.0.0')
+    else:
+        log('[WARN] QEMU %s: the GTK4 port only applies to 11.0.0; applying the '
+            'EGL/GL guards only (GTK backend will NOT be built)' % (_ver or '?'))
+        apply_android_display_patch('qemu-11.1.2-android-egl.patch', _want_virgl)
+        apply_android_display_patch('qemu-11.1.2-gtk-gl.patch', _want_gtk)
+else:
+    log('[SKIP] GTK/GL Android display patches (USE_GTK and USE_VIRGL are off)')
 
 # ---------------------------------------------------------------------------
 print('=' * 60)
