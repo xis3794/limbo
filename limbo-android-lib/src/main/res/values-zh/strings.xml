@@ -576,6 +576,13 @@
     <string name="qemu_retry">"重试"</string>
     <string name="qemu_installed_badge">"已安装"</string>
     <string name="qemu_capabilities">"安装包声明了 %1$d 种机型 · %2$d 个 CPU"</string>
+    <string name="vnc_password_unsupported">"当前 QEMU 版本不支持 VNC 密码"</string>
+    <string name="vnc_password_unsupported_summary">"该 QEMU 构建没有编译 crypto 后端，无法使用 VNC 密码认证。VNC 服务仍只监听本机。"</string>
+    <string name="log_export_saved">"日志已保存到 %1$s"</string>
+    <string name="log_export_failed">"日志保存失败：%1$s"</string>
+    <string name="log_export_empty">"日志是空的——虚拟机还没写入任何内容"</string>
+    <string name="log_export_direct">"保存到 Download"</string>
+    <string name="log_export_dialog_title">"导出 Limbo 日志"</string>
     <string name="qemu_manifest_note">"该安装包没有能力清单，设置项会退回内置列表。用 tools/package_qemu.py 重新打包即可获得按版本区分的列表。"</string>
     <string name="machine_type_unsupported">"机型 \"%1$s\" 不在 QEMU %2$s 的支持范围内，将改用兼容机型。"</string>
     <string name="cpu_unsupported">"CPU \"%1$s\" 不在 QEMU %2$s 的支持范围内，将改用默认 CPU。"</string>

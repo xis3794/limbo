@@ -23,6 +23,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 import android.webkit.MimeTypeMap;
@@ -32,6 +33,7 @@ import androidx.documentfile.provider.DocumentFile;
 import com.limbo.emu.lib.R;
 import com.max2idea.android.limbo.dialog.DialogUtils;
 import com.max2idea.android.limbo.machine.Machine.FileType;
+import com.max2idea.android.limbo.machine.MachineController;
 import com.max2idea.android.limbo.main.Config;
 import com.max2idea.android.limbo.main.LimboActivity;
 import com.max2idea.android.limbo.main.LimboApplication;
@@ -50,7 +52,10 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.Locale;
 
 /**
  * @author dev
@@ -432,13 +437,197 @@ public class FileUtils {
     }
 
 
+    /**
+     * Reads the current limbo log. Returns "" (never null) when the log file was
+     * never set up or does not exist yet, so callers can tell "empty" from "error"
+     * instead of crashing on a null path.
+     */
+    public static String readLogContents() {
+        if (Config.logFilePath == null) {
+            Log.w(TAG, "readLogContents: log file is not ready");
+            return "";
+        }
+        try {
+            return getFileContents(Config.logFilePath);
+        } catch (Exception e) {
+            Log.e(TAG, "readLogContents: could not read " + Config.logFilePath + ": " + e);
+            return "";
+        }
+    }
+
+    /** Machine name for the exported log header, or "" when nothing is loaded. */
+    private static String getCurrentMachineNameForLog() {
+        try {
+            // getMachineName() dereferences the machine executor, which throws when
+            // no machine has been loaded yet, so guard and degrade to "(none)".
+            if (MachineController.getInstance().getMachine() == null)
+                return "";
+            String name = MachineController.getInstance().getMachineName();
+            return name != null ? name : "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private static String getQemuVersionForLog() {
+        try {
+            String version = LimboApplication.getQemuVersionString();
+            if (version != null && version.trim().length() > 0)
+                return version.trim();
+        } catch (Exception ignored) {
+        }
+        return "unknown";
+    }
+
+    /**
+     * Prepends a small header (QEMU version / machine / timestamp) so a log that
+     * users paste into a bug report says which build produced it.
+     */
+    public static String buildLogExportText(String contents) {
+        if (contents == null)
+            contents = "";
+        String machine = getCurrentMachineNameForLog();
+        String header = "Limbo log\n"
+                + "QEMU version: " + getQemuVersionForLog() + "\n"
+                + "Machine: " + (machine.length() > 0 ? machine : "(none)") + "\n"
+                + "Exported at: " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date()) + "\n"
+                + "----------------------------------------\n";
+        return header + contents;
+    }
+
+    /** Canonical location users are told about: /sdcard/Download/limbolog.txt */
+    public static String getLogExportPath() {
+        return new File(new File(Environment.getExternalStorageDirectory(),
+                Environment.DIRECTORY_DOWNLOADS), Config.destLogFilename).getAbsolutePath();
+    }
+
+    /**
+     * Primary log export path: writes the log straight to the public Downloads
+     * folder as /sdcard/Download/limbolog.txt, no SAF / storage permission needed.
+     *
+     * On API 29+ it goes through MediaStore (Downloads collection) which needs no
+     * permission; it reuses an existing limbolog.txt entry so repeated exports
+     * overwrite instead of piling up "limbolog (1).txt". If any of that fails it
+     * falls back to a plain FileOutputStream, and the result is only reported as
+     * successful when the bytes really landed.
+     *
+     * @return the human readable path on success, null on failure (error is logged)
+     */
+    public static String exportLogToDownloadDirect(Context context, String contents) {
+        if (context == null)
+            return null;
+        if (contents == null)
+            contents = "";
+        byte[] bytes = contents.getBytes();
+
+        if (android.os.Build.VERSION.SDK_INT >= 29 && writeLogViaMediaStore(context, bytes))
+            return getLogExportPath();
+
+        // Legacy / fallback path: /sdcard/Download is writable for this app
+        // (WRITE_EXTERNAL_STORAGE + requestLegacyExternalStorage + targetSdk 28).
+        File dest = new File(getLogExportPath());
+        FileOutputStream fos = null;
+        try {
+            File dir = dest.getParentFile();
+            if (dir != null && !dir.exists())
+                dir.mkdirs();
+            fos = new FileOutputStream(dest);
+            fos.write(bytes);
+            fos.flush();
+        } catch (Exception e) {
+            Log.e(TAG, "exportLogToDownloadDirect: file write to " + dest + " failed: " + e);
+            return null;
+        } finally {
+            if (fos != null) {
+                try {
+                    fos.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
+        // Only claim success if the file is actually there and non-empty.
+        if (dest.exists() && dest.length() > 0)
+            return dest.getAbsolutePath();
+        Log.e(TAG, "exportLogToDownloadDirect: " + dest + " was not written");
+        return null;
+    }
+
+    /** Returns true only when the log bytes were actually written via MediaStore. */
+    private static boolean writeLogViaMediaStore(Context context, byte[] bytes) {
+        Uri uri = null;
+        OutputStream os = null;
+        try {
+            // Reuse an existing entry so repeated exports overwrite the same file.
+            uri = findExistingDownloadEntry(context, Config.destLogFilename);
+            if (uri == null) {
+                android.content.ContentValues values = new android.content.ContentValues();
+                values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, Config.destLogFilename);
+                values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+                values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                        Environment.DIRECTORY_DOWNLOADS + "/");
+                uri = context.getContentResolver().insert(
+                        android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            }
+            if (uri == null)
+                return false;
+            os = context.getContentResolver().openOutputStream(uri, "wt");
+            if (os == null)
+                return false;
+            os.write(bytes);
+            os.flush();
+            return true;
+        } catch (Exception e) {
+            Log.w(TAG, "writeLogViaMediaStore failed: " + e);
+            return false;
+        } finally {
+            if (os != null) {
+                try {
+                    os.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
+
+    /** Looks up an existing Downloads entry by display name, or null. */
+    private static Uri findExistingDownloadEntry(Context context, String displayName) {
+        android.database.Cursor cursor = null;
+        try {
+            String selection = android.provider.MediaStore.MediaColumns.DISPLAY_NAME + "=?";
+            cursor = context.getContentResolver().query(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    new String[]{android.provider.MediaStore.MediaColumns._ID},
+                    selection, new String[]{displayName}, null);
+            if (cursor != null && cursor.moveToFirst()) {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow(
+                        android.provider.MediaStore.MediaColumns._ID));
+                return android.content.ContentUris.withAppendedId(
+                        android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, id);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "findExistingDownloadEntry: " + e);
+        } finally {
+            if (cursor != null) {
+                try {
+                    cursor.close();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return null;
+    }
+
     public static Uri saveLogFileSDCard(Activity activity, Uri destDir) {
+        return saveLogFileSDCard(activity, destDir, null);
+    }
+
+    public static Uri saveLogFileSDCard(Activity activity, Uri destDir, String contents) {
         DocumentFile destFileF;
         OutputStream os = null;
         Uri uri = null;
 
         try {
-            String logFileContents = getFileContents(Config.logFilePath);
+            String logFileContents = contents != null ? contents : readLogContents();
             DocumentFile dir = DocumentFile.fromTreeUri(activity, destDir);
             if (dir == null)
                 throw new Exception("Could not get log path directory");
@@ -446,8 +635,16 @@ public class FileUtils {
             //Create the file if doesn't exist
             destFileF = dir.findFile(Config.destLogFilename);
             if (destFileF == null) {
-                destFileF = dir.createFile(MimeTypeMap.getSingleton().getMimeTypeFromExtension("txt"), Config.destLogFilename);
+                // Some vendors have no MimeTypeMap entry for "txt"; passing a null
+                // mime type makes createFile() throw, which used to surface only as
+                // a short toast -> users saw "nothing exported".
+                String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension("txt");
+                if (mimeType == null)
+                    mimeType = "text/plain";
+                destFileF = dir.createFile(mimeType, Config.destLogFilename);
             }
+            if (destFileF == null)
+                throw new Exception("Could not create " + Config.destLogFilename);
 
             //Write to the dest
             os = activity.getContentResolver().openOutputStream(destFileF.getUri());
@@ -514,12 +711,17 @@ public class FileUtils {
 
     public static String saveLogFileLegacy(Activity activity,
                                            String destLogFilePath) {
+        return saveLogFileLegacy(activity, destLogFilePath, null);
+    }
+
+    public static String saveLogFileLegacy(Activity activity,
+                                           String destLogFilePath, String contents) {
 
         String filePath = null;
         File destFileF = new File(destLogFilePath, Config.destLogFilename);
 
         try {
-            String logFileContents = getFileContents(Config.logFilePath);
+            String logFileContents = contents != null ? contents : readLogContents();
             FileUtils.saveFileContents(destFileF.getAbsolutePath(), logFileContents);
 
             //success
@@ -561,6 +763,8 @@ public class FileUtils {
         if (data == null)
             return null;
         Bundle b = data.getExtras();
+        if (b == null)
+            return null;
         String file = b.getString("currDir");
         return file;
     }
@@ -570,6 +774,8 @@ public class FileUtils {
         if (data == null)
             return null;
         Bundle b = data.getExtras();
+        if (b == null)
+            return null;
         String file = b.getString("file");
         return file;
     }
@@ -578,6 +784,8 @@ public class FileUtils {
         if (data == null)
             return null;
         Bundle b = data.getExtras();
+        if (b == null)
+            return null;
         FileType fileType = (FileType) b.getSerializable("fileType");
         return fileType;
     }
@@ -586,24 +794,79 @@ public class FileUtils {
         DialogUtils.UIAlert(context, context.getString(R.string.Error), context.getString(R.string.FilePathNotSupportedWarning));
     }
 
+    /**
+     * Primary export entry point: dumps the current log to
+     * /sdcard/Download/limbolog.txt without going through SAF. Shows a toast with
+     * the real path on success, and an explicit "log is empty" toast when there is
+     * nothing to export (instead of silently "succeeding").
+     *
+     * @return the file path on success, null otherwise
+     */
+    public static String exportLogDirect(Activity activity) {
+        if (activity == null)
+            return null;
+        String contents = readLogContents();
+        if (contents == null || contents.trim().length() == 0) {
+            ToastUtils.toastLong(activity, activity.getString(R.string.log_export_empty));
+            return null;
+        }
+        String path = exportLogToDownloadDirect(activity, buildLogExportText(contents));
+        if (path == null) {
+            ToastUtils.toastLong(activity, activity.getString(R.string.log_export_failed,
+                    getLogExportPath()));
+            return null;
+        }
+        ToastUtils.toastLong(activity, activity.getString(R.string.log_export_saved, path));
+        return path;
+    }
+
+    /**
+     * Secondary export entry point used after the user picked a directory through
+     * SAF or through the legacy file manager. Never fails silently: every failure
+     * path ends in a toast.
+     */
     public static void saveLogToFile(final Activity activity, final String logFileDestDir) {
+        if (activity == null || logFileDestDir == null)
+            return;
         new Thread(new Runnable() {
             public void run() {
+                String contents = readLogContents();
+                if (contents == null || contents.trim().length() == 0) {
+                    ToastUtils.toastLong(activity, activity.getString(R.string.log_export_empty));
+                    return;
+                }
+                String exportText = FileUtils.buildLogExportText(contents);
 
                 String displayName = null;
-                if (logFileDestDir.startsWith("content://")) {
-                    Uri exportDirUri = Uri.parse(logFileDestDir);
-                    Uri fileCreatedUri = FileUtils.saveLogFileSDCard(activity,
-                            exportDirUri);
-                    displayName = FileUtils.getFullPathFromDocumentFilePath(fileCreatedUri.toString());
-                } else {
-                    String filePath = FileUtils.saveLogFileLegacy(activity, logFileDestDir);
-                    displayName = filePath;
+                try {
+                    if (logFileDestDir.startsWith("content://")) {
+                        Uri exportDirUri = Uri.parse(logFileDestDir);
+                        Uri fileCreatedUri = FileUtils.saveLogFileSDCard(activity,
+                                exportDirUri, exportText);
+                        if (fileCreatedUri != null) {
+                            // getFullPathFromDocumentFilePath() cannot resolve every
+                            // provider, so fall back to the uri itself rather than
+                            // dropping the "saved" feedback (the old silent failure).
+                            String full = FileUtils.getFullPathFromDocumentFilePath(fileCreatedUri.toString());
+                            displayName = (full != null && full.trim().length() > 0)
+                                    ? full : fileCreatedUri.toString();
+                        }
+                    } else {
+                        displayName = FileUtils.saveLogFileLegacy(activity, logFileDestDir, exportText);
+                    }
+                } catch (Exception ex) {
+                    Log.e(TAG, "saveLogToFile: " + ex);
                 }
 
-                if (displayName != null) {
-
-                    ToastUtils.toastShort(activity, activity.getString(R.string.LogfileSaved));
+                if (displayName == null) {
+                    // Previously this was a silent no-op (the "saved" toast was only
+                    // shown when displayName != null), which users perceived as
+                    // "nothing happens".
+                    ToastUtils.toastLong(activity,
+                            activity.getString(R.string.log_export_failed, logFileDestDir));
+                } else {
+                    ToastUtils.toastLong(activity,
+                            activity.getString(R.string.log_export_saved, displayName));
                 }
             }
         }).start();

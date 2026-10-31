@@ -191,7 +191,10 @@ public final class QemuVersionManager {
                 readArray(caps, "vga"),
                 readArray(caps, "soundcards"),
                 readArray(caps, "nic_cards"),
-                readArray(caps, "displays"));
+                readArray(caps, "displays"),
+                // Older packages have no flag; assume the password works so
+                // their behaviour does not change.
+                caps.optBoolean("vnc_password", true));
     }
 
     private static List<String> readArray(JSONObject o, String key) {

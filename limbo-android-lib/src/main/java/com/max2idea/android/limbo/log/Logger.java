@@ -141,17 +141,51 @@ public class Logger {
         alertDialog.setButton(DialogInterface.BUTTON_NEUTRAL, activity.getString(R.string.CopyTo),
                 new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int which) {
-                ToastUtils.toastShort(activity, activity.getString(R.string.ChooseDirToSaveLogFile));
-                LimboFileManager.browse(activity, FileType.LOG_DIR, Config.OPEN_LOG_FILE_DIR_REQUEST_CODE);
+                // The old code fired ACTION_OPEN_DOCUMENT_TREE straight away and the
+                // result was dropped without any feedback on the home screen (see
+                // LimboActivity.onActivityResult), so "Copy To" looked broken.
                 alertDialog.dismiss();
+                promptExportLog(activity);
             }
         });
         alertDialog.show();
     }
 
+    /**
+     * Export chooser. The first entry writes the log straight to
+     * /sdcard/Download/limbolog.txt with no SAF / permission involved, which is the
+     * path that is guaranteed to work on this device; the second keeps the old
+     * "pick a directory" flow as a secondary option.
+     */
+    public static void promptExportLog(final Activity activity) {
+        if (activity == null)
+            return;
+        final String[] items = new String[]{
+                activity.getString(R.string.log_export_direct),
+                activity.getString(R.string.CopyTo)
+        };
+        AlertDialog.Builder builder = new AlertDialog.Builder(activity);
+        builder.setTitle(R.string.log_export_dialog_title);
+        builder.setItems(items, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                if (which == 0) {
+                    FileUtils.exportLogDirect(activity);
+                } else {
+                    ToastUtils.toastShort(activity, activity.getString(R.string.ChooseDirToSaveLogFile));
+                    LimboFileManager.browse(activity, FileType.LOG_DIR, Config.OPEN_LOG_FILE_DIR_REQUEST_CODE);
+                }
+            }
+        });
+        builder.show();
+    }
+
     public static void viewLimboLog(final Activity activity) {
 
-        String contents = FileUtils.getFileContents(Config.logFilePath);
+        // Config.logFilePath is null until setupLogFile() runs (it is called from the
+        // architecture-specific LimboEmuActivity). Passing a null path crashed inside
+        // new File(null) -> NPE, so the log dialog never even showed up.
+        String contents = FileUtils.readLogContents();
 
         if (contents.length() > 50 * 1024)
             contents = contents.substring(0, 25 * 1024)
@@ -159,6 +193,11 @@ public class Logger {
                             contents.substring(contents.length() - 25 * 1024);
 
         final Spannable contentsFormatted = formatAndroidLog(contents);
+
+        // An empty log renders as a blank black dialog, which reads as "the app is
+        // broken". Say explicitly that nothing has been logged yet.
+        if (contents.trim().length() == 0)
+            ToastUtils.toastLong(activity, activity.getString(R.string.log_export_empty));
 
         activity.runOnUiThread(new Runnable() {
             @Override

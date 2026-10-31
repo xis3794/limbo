@@ -128,7 +128,8 @@
       "displays": [
         "VNC",
         "SDL"
-      ]
+      ],
+      "vnc_password": true
     },
     "8.0.5": {
       "version_code": 80005,
@@ -270,7 +271,8 @@
       "displays": [
         "VNC",
         "SDL"
-      ]
+      ],
+      "vnc_password": false
     },
     "10.2.0": {
       "version_code": 100200,
@@ -421,7 +423,8 @@
       "displays": [
         "VNC",
         "SDL"
-      ]
+      ],
+      "vnc_password": false
     },
     "11.1.2": {
       "version_code": 110102,
@@ -556,7 +559,8 @@
       "displays": [
         "VNC",
         "SDL"
-      ]
+      ],
+      "vnc_password": false
     }
   }
 }

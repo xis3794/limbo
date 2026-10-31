@@ -42,10 +42,29 @@ public class QemuVersion {
         public final List<String> soundcards;
         public final List<String> nicCards;
         public final List<String> displays;
+        /**
+         * Whether {@code -vnc ...,password=on} can work on this build.
+         *
+         * QEMU validates the VNC password with
+         * {@code qcrypto_cipher_supports(QCRYPTO_CIPHER_ALG_DES, ECB)} and
+         * aborts with "Cipher backend does not support DES algorithm" when the
+         * build has no crypto backend. 5.1.0 still ships the built-in
+         * crypto/desrfb.c, 8.0.5's cipher-builtin only knows AES, and 10.x/11.x
+         * use cipher-stub (supports() == false), so enabling the password on
+         * those builds would stop the VM from starting at all.
+         */
+        public final boolean vncPassword;
 
         public Capabilities(int versionCode, List<String> machineTypes, List<String> cpus,
                             List<String> vga, List<String> soundcards,
                             List<String> nicCards, List<String> displays) {
+            this(versionCode, machineTypes, cpus, vga, soundcards, nicCards, displays, true);
+        }
+
+        public Capabilities(int versionCode, List<String> machineTypes, List<String> cpus,
+                            List<String> vga, List<String> soundcards,
+                            List<String> nicCards, List<String> displays,
+                            boolean vncPassword) {
             this.versionCode = versionCode;
             this.machineTypes = safe(machineTypes);
             this.cpus = safe(cpus);
@@ -53,6 +72,7 @@ public class QemuVersion {
             this.soundcards = safe(soundcards);
             this.nicCards = safe(nicCards);
             this.displays = safe(displays);
+            this.vncPassword = vncPassword;
         }
 
         private static List<String> safe(List<String> in) {
@@ -88,6 +108,11 @@ public class QemuVersion {
 
         public boolean supportsNic(String name) {
             return contains(nicCards, name);
+        }
+
+        /** True when {@code -vnc ...,password=on} is usable on this build. */
+        public boolean supportsVncPassword() {
+            return vncPassword;
         }
 
         private static boolean contains(List<String> list, String value) {

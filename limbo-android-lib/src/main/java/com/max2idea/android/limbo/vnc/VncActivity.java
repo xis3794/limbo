@@ -17,7 +17,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.limbo.emu.lib.R;
 import com.max2idea.android.limbo.machine.MachineController;
-import com.max2idea.android.limbo.main.LimboSettingsManager;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -132,8 +131,11 @@ public class VncActivity extends AppCompatActivity implements VncClient.Listener
         }
         hideError();
         stateView.setText(R.string.vnc_connecting);
-        final String password = LimboSettingsManager.getVNCEnablePassword(this)
-                ? LimboSettingsManager.getVNCPass(this) : null;
+        // Use the same decision the VM made when it built the -vnc argument:
+        // when the active QEMU build has no crypto backend, the server runs
+        // without authentication, so offering a password here would make the
+        // viewer request the VNC security type and fail the handshake.
+        final String password = VncSupport.effectivePassword(this);
         new Thread(new Runnable() {
             @Override
             public void run() {

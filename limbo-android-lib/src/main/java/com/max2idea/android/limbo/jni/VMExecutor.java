@@ -37,6 +37,7 @@ import com.max2idea.android.limbo.main.LimboSDLActivity;
 import com.max2idea.android.limbo.main.LimboSettingsManager;
 import com.max2idea.android.limbo.qmp.QmpClient;
 import com.max2idea.android.limbo.toast.ToastUtils;
+import com.max2idea.android.limbo.vnc.VncSupport;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -194,18 +195,25 @@ private String getQemuLibrary() {
     private void addUIOptions(Context context, ArrayList<String> paramsList) {
         if (MachineController.getInstance().isVNCEnabled()) {
             paramsList.add("-vnc");
-            String vncParam = "";
-            if (LimboSettingsManager.getVNCEnablePassword(context)) {
-                //TODO: Allow connections from External
-                // Use with x509 auth and TLS for encryption
-                vncParam += ":1";
-            } else {
-                // Allow connections only from localhost using localsocket without
-                // a password
-                vncParam += Config.defaultVNCHost + ":" + Config.defaultVNCPort;
+            // Always bind to localhost. The password option used to switch the
+            // listener to ":1" (all interfaces), but QEMU aborts the whole VM
+            // when "password" is requested from a build without a crypto
+            // backend ("Cipher backend does not support DES algorithm"), so the
+            // bind address must never depend on the password setting.
+            String vncParam = Config.defaultVNCHost + ":" + Config.defaultVNCPort;
+            boolean passwordRequested = LimboSettingsManager.getVNCEnablePassword(context);
+            if (passwordRequested && VncSupport.canUsePassword(context)) {
+                // QEMU 8 deprecated the bare "password" flag: use the boolean
+                // form so a future release does not reject the option.
+                vncParam += ",password=on";
+            } else if (passwordRequested) {
+                Log.w(TAG, "VNC password disabled: QEMU "
+                        + LimboApplication.getQemuVersionString()
+                        + " was built without a crypto backend, so -vnc ...password"
+                        + " would abort the VM (\"Cipher backend does not support"
+                        + " DES algorithm\"). Starting with " + vncParam
+                        + " and no authentication.");
             }
-            if (LimboSettingsManager.getVNCEnablePassword(context))
-                vncParam += ",password";
 
             paramsList.add(vncParam);
 
@@ -1112,7 +1120,10 @@ private String getQemuLibrary() {
                 continueVM(5000);
             }
 
-            if (MachineController.getInstance().isVNCEnabled() && LimboSettingsManager.getVNCEnablePassword(LimboApplication.getInstance())) {
+            // QMP "change vnc password" only works when QEMU was started with
+            // password auth, which needs a crypto backend (see addUIOptions).
+            if (MachineController.getInstance().isVNCEnabled()
+                    && VncSupport.effectivePassword(LimboApplication.getInstance()) != null) {
                 changeVncPass(LimboApplication.getInstance(), 2000);
             }
 
@@ -1154,7 +1165,7 @@ private String getQemuLibrary() {
                     e.printStackTrace();
                 }
                 try {
-                    vncchangepassword(LimboSettingsManager.getVNCPass(context));
+                    vncchangepassword(VncSupport.effectivePassword(context));
                 } catch (Exception e) {
                     ToastUtils.toastLong(LimboApplication.getInstance(),
                             context.getString(R.string.CouldNotSetVNCPass) + ": " + e.getMessage());

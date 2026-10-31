@@ -3350,6 +3350,33 @@ public class LimboActivity extends AppCompatActivity
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        // The log dialog is reachable from the home screen (homeMode == true), where
+        // we used to return here without handling the LOG_DIR result at all. That is
+        // why "Copy To" appeared to do nothing. Handle this one request before the
+        // homeMode shortcut, and never fail silently.
+        if (requestCode == Config.OPEN_LOG_FILE_DIR_REQUEST_CODE
+                || requestCode == Config.OPEN_LOG_FILE_DIR_ASF_REQUEST_CODE) {
+            boolean picked = resultCode == RESULT_OK || resultCode == Config.FILEMAN_RETURN_CODE;
+            String dest = null;
+            if (picked) {
+                if (requestCode == Config.OPEN_LOG_FILE_DIR_ASF_REQUEST_CODE) {
+                    dest = FileUtils.getFileUriFromIntent(this, data, true);
+                } else {
+                    dest = FileUtils.getDirPathFromIntent(this, data);
+                }
+            }
+            if (dest != null && dest.trim().length() > 0) {
+                FileUtils.saveLogToFile(LimboActivity.this, dest);
+            } else if (picked) {
+                // The picker returned but the uri is unusable (some vendor file
+                // managers hand back a provider we cannot write to). Still get the
+                // log out: fall back to the permission-free Downloads export.
+                FileUtils.exportLogDirect(this);
+            } else {
+                ToastUtils.toastShort(this, getString(R.string.log_export_failed,
+                        getString(R.string.Cancel)));
+            }
+        }
         if (homeMode) {
             if (resultCode == Config.SDL_QUIT_RESULT_CODE
                     && MachineController.getInstance().isRunning()) {
@@ -3420,15 +3447,7 @@ public class LimboActivity extends AppCompatActivity
                 LimboSettingsManager.setSharedDir(this, file);
             }
         } else if (requestCode == Config.OPEN_LOG_FILE_DIR_REQUEST_CODE || requestCode == Config.OPEN_LOG_FILE_DIR_ASF_REQUEST_CODE) {
-            String file;
-            if (requestCode == Config.OPEN_LOG_FILE_DIR_ASF_REQUEST_CODE) {
-                file = FileUtils.getFileUriFromIntent(this, data, true);
-            } else {
-                file = FileUtils.getDirPathFromIntent(this, data);
-            }
-            if (file != null) {
-                FileUtils.saveLogToFile(LimboActivity.this, file);
-            }
+            // Handled at the top of onActivityResult, before the homeMode shortcut.
         } else if (requestCode == Config.OPEN_IMPORT_BIOS_FILE_REQUEST_CODE || requestCode == Config.OPEN_IMPORT_BIOS_FILE_ASF_REQUEST_CODE) {
             String file;
             if (requestCode == Config.OPEN_IMPORT_BIOS_FILE_ASF_REQUEST_CODE) {

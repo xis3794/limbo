@@ -31,6 +31,7 @@ import com.limbo.emu.lib.R;
 import com.max2idea.android.limbo.qemu.QemuVersionManager;
 import com.max2idea.android.limbo.ui.AppBackgroundView;
 import com.max2idea.android.limbo.ui.SteplessSlider;
+import com.max2idea.android.limbo.vnc.VncSupport;
 
 /** Consistent, app-styled replacement for the old preference screen. */
 public class AppSettingsActivity extends AppCompatActivity {
@@ -192,8 +193,17 @@ public class AppSettingsActivity extends AppCompatActivity {
         addSwitch(network, R.drawable.ic_tab_network,
                 R.string.AllowExternalQMPConnections, R.string.AllowExternalQMPConnectionsSummary,
                 "enableExternalQMP", false, null);
+        final boolean vncPasswordUsable = VncSupport.canUsePassword(this);
+        // QEMU 10/11 packages have no crypto backend, so -vnc ...,password=on
+        // would abort the VM. Point that out on the row instead of silently
+        // ignoring the stored preference (which is kept as-is so switching
+        // back to QEMU 5.1 restores the password).
+        CharSequence vncPasswordTitle = getString(vncPasswordUsable
+                ? R.string.EnableVNCPassword : R.string.vnc_password_unsupported);
+        CharSequence vncPasswordSummary = getString(vncPasswordUsable
+                ? R.string.SetVNCPassword : R.string.vnc_password_unsupported_summary);
         addSwitch(network, R.drawable.ic_nav_settings,
-                R.string.EnableVNCPassword, R.string.SetVNCPassword,
+                vncPasswordTitle, vncPasswordSummary,
                 "enableVNCPassword", false, new CompoundButton.OnCheckedChangeListener() {
                     @Override
                     public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -333,7 +343,14 @@ public class AppSettingsActivity extends AppCompatActivity {
     private void addSwitch(LinearLayout card, int iconRes, int titleRes, int summaryRes,
                            final String key, boolean defaultValue,
                            CompoundButton.OnCheckedChangeListener extra) {
-        LinearLayout row = addRow(card, iconRes, getString(titleRes), getString(summaryRes));
+        addSwitch(card, iconRes, getString(titleRes), getString(summaryRes),
+                key, defaultValue, extra);
+    }
+
+    private void addSwitch(LinearLayout card, int iconRes, CharSequence title, CharSequence summary,
+                           final String key, boolean defaultValue,
+                           CompoundButton.OnCheckedChangeListener extra) {
+        LinearLayout row = addRow(card, iconRes, title, summary);
         SwitchMaterial toggle = new SwitchMaterial(this);
         toggle.setMinWidth(0);
         toggle.setMinHeight(0);

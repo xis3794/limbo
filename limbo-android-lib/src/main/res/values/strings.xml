@@ -575,6 +575,13 @@
     <string name="qemu_retry">"Retry"</string>
     <string name="qemu_installed_badge">"Installed"</string>
     <string name="qemu_capabilities">"Package declares %1$d machine types · %2$d CPUs"</string>
+    <string name="vnc_password_unsupported">"VNC password is not available on this QEMU build"</string>
+    <string name="vnc_password_unsupported_summary">"This QEMU build was compiled without a crypto backend, so VNC password auth cannot be used. The VNC server stays localhost-only."</string>
+    <string name="log_export_saved">"Log saved to %1$s"</string>
+    <string name="log_export_failed">"Could not save the log: %1$s"</string>
+    <string name="log_export_empty">"The log is empty - the VM has not written anything yet"</string>
+    <string name="log_export_direct">"Save to Download"</string>
+    <string name="log_export_dialog_title">"Export Limbo log"</string>
     <string name="qemu_manifest_note">"This package has no capability list: the settings fall back to the built-in lists. Rebuild it with tools/package_qemu.py to get a per-version list."</string>
     <string name="machine_type_unsupported">"Machine type \"%1$s\" is not offered by QEMU %2$s; a compatible model will be used instead."</string>
     <string name="cpu_unsupported">"CPU \"%1$s\" is not offered by QEMU %2$s; the default will be used instead."</string>
