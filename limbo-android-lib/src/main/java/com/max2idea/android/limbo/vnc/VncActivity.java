@@ -78,6 +78,7 @@ public class VncActivity extends AppCompatActivity implements VncClient.Listener
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         setupFullscreen();
         setContentView(R.layout.activity_vnc);
 

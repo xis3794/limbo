@@ -14,6 +14,10 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 import javax.crypto.Cipher;
@@ -52,10 +56,16 @@ public class VncClient {
 
     private Socket socket;
     private DataInputStream in;
-    private OutputStream out;
+    private volatile OutputStream out;
     private Thread thread;
     private volatile boolean running;
     private volatile boolean sizeChanged;
+
+    /** Pointer/key packets are written on this worker, never on Android's UI
+     * thread. A synchronous Socket.write() from onTouchEvent raises
+     * NetworkOnMainThreadException and was misreported as "Lost connection". */
+    private final Object inputExecutorLock = new Object();
+    private ExecutorService inputExecutor;
 
     private Bitmap bitmap;
     private int width;
@@ -88,6 +98,7 @@ public class VncClient {
                 } finally {
                     closeQuietly();
                     running = false;
+                    stopInputExecutor();
                     listener.onDisconnected();
                 }
             }
@@ -100,11 +111,55 @@ public class VncClient {
     public void stop() {
         running = false;
         closeQuietly();
+        stopInputExecutor();
         Thread t = thread;
         thread = null;
         if (t != null && t != Thread.currentThread()) {
             t.interrupt();
         }
+    }
+
+    private void stopInputExecutor() {
+        synchronized (inputExecutorLock) {
+            ExecutorService executor = inputExecutor;
+            inputExecutor = null;
+            if (executor != null) {
+                executor.shutdownNow();
+            }
+        }
+    }
+
+    private void enqueueInput(Runnable packet) {
+        synchronized (inputExecutorLock) {
+            if (!running) {
+                return;
+            }
+            if (inputExecutor == null) {
+                inputExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
+                    @Override
+                    public Thread newThread(Runnable runnable) {
+                        Thread worker = new Thread(runnable, "VncInput");
+                        worker.setDaemon(true);
+                        return worker;
+                    }
+                });
+            }
+            try {
+                inputExecutor.execute(packet);
+            } catch (RejectedExecutionException ignored) {
+                // stop() raced the input callback; the connection is gone.
+            }
+        }
+    }
+
+    private void inputFailed(Exception e) {
+        if (!running) {
+            return;
+        }
+        Log.w(TAG, "VNC input failed", e);
+        running = false;
+        closeQuietly();
+        listener.onError("Lost connection", true);
     }
 
     /**
@@ -560,35 +615,55 @@ public class VncClient {
         }
     }
 
-    public synchronized void sendPointer(final int x, final int y, final int mask) {
-        if (out == null) {
+    public void sendPointer(final int x, final int y, final int mask) {
+        if (!running || out == null) {
             return;
         }
-        try {
-            out.write(5); // PointerEvent
-            out.write(mask);
-            writeInt16(clamp(x, 65535));
-            writeInt16(clamp(y, 65535));
-            out.flush();
-        } catch (Exception e) {
-            listener.onError("Lost connection", true);
-        }
+        enqueueInput(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (VncClient.this) {
+                    if (out == null) {
+                        return;
+                    }
+                    try {
+                        out.write(5); // PointerEvent
+                        out.write(mask);
+                        writeInt16(clamp(x, 65535));
+                        writeInt16(clamp(y, 65535));
+                        out.flush();
+                    } catch (Exception e) {
+                        inputFailed(e);
+                    }
+                }
+            }
+        });
     }
 
-    public synchronized void sendKey(final int keysym, final boolean down) {
-        if (out == null) {
+    public void sendKey(final int keysym, final boolean down) {
+        if (!running || out == null) {
             return;
         }
-        try {
-            out.write(4); // KeyEvent
-            out.write(down ? 1 : 0);
-            out.write(0);
-            out.write(0);
-            writeInt32(keysym);
-            out.flush();
-        } catch (Exception e) {
-            listener.onError("Lost connection", true);
-        }
+        enqueueInput(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (VncClient.this) {
+                    if (out == null) {
+                        return;
+                    }
+                    try {
+                        out.write(4); // KeyEvent
+                        out.write(down ? 1 : 0);
+                        out.write(0);
+                        out.write(0);
+                        writeInt32(keysym);
+                        out.flush();
+                    } catch (Exception e) {
+                        inputFailed(e);
+                    }
+                }
+            }
+        });
     }
 
     public synchronized Bitmap peekBitmap() {

@@ -167,17 +167,24 @@ public class VncView extends View {
             setFocusableInTouchMode(true);
         }
         requestFocus();
-        InputMethodManager imm = inputMethodManager();
+        final InputMethodManager imm = inputMethodManager();
         if (imm == null) {
             return;
         }
-        if (imm.isActive(this)) {
-            // Already up, nothing to do.
-            imeVisible = true;
-            return;
-        }
-        imm.showSoftInput(this, InputMethodManager.SHOW_FORCED);
-        imeVisible = true;
+        // The keyboard button still owns the current UI event. Post the request
+        // so the view has actually become the served/focused IME target before
+        // asking the system to open it; calling it synchronously here was a no-op
+        // on some Android/IME combinations.
+        post(new Runnable() {
+            @Override
+            public void run() {
+                requestFocus();
+                // Keep the toggle truthful: if the system rejected this request,
+                // the next tap must be allowed to try showing it again.
+                imeVisible = imm.showSoftInput(VncView.this,
+                        InputMethodManager.SHOW_IMPLICIT) || imm.isActive(VncView.this);
+            }
+        });
     }
 
     /**
