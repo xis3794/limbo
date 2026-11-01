@@ -5,7 +5,8 @@ include $(CLEAR_VARS)
 LOCAL_ARM_MODE:= $(APP_ARM_MODE)
 
 LOCAL_SRC_FILES :=			\
-	vm-executor-jni.c
+	vm-executor-jni.c \
+	limbo_gtk.c
 
 LOCAL_MODULE := limbo
 
