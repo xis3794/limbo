@@ -35,6 +35,7 @@ import android.text.Editable;
 import android.text.Selection;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.content.Context;
 import android.view.View;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.InputMethodManager;
@@ -76,7 +77,7 @@ public final class ImContext {
 	 */
 	private static void reset(View view) {
 		InputMethodManager imm = (InputMethodManager)
-				view.getContext().getSystemService(View.INPUT_METHOD_SERVICE);
+				view.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
 		if (imm != null) {
 			imm.restartInput(view);
 		}

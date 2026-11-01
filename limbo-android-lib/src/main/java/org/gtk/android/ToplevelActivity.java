@@ -127,6 +127,13 @@ public class ToplevelActivity extends Activity {
 			private native void notifyAttached();
 			@GlibContext.GtkThread
 			private native void notifyLayoutSurface(int width, int height, float scale);
+			/**
+			 * Tells GDK whether this surface is actually on screen. The Android
+			 * backend keeps a per-surface visible flag and drops frames while it
+			 * is false, so it has to follow the SurfaceHolder lifecycle.
+			 */
+			@GlibContext.GtkThread
+			private native void notifyVisibility(boolean visible);
 			@GlibContext.GtkThread
 			private native void notifyLayoutPosition(int x, int y);
 			@GlibContext.GtkThread
@@ -533,7 +540,13 @@ public class ToplevelActivity extends Activity {
 			}
 			this.insets = Insets.of(left, top, right, bottom);
 			requestLayout();
-			return WindowInsets.CONSUMED;
+			// WindowInsets.CONSUMED is API 30; on older releases the insets
+			// are already consumed by the return above, so hand back the same
+			// instance the system gave us.
+			if (Build.VERSION.SDK_INT >= 30) {
+				return Api30Insets.consumed(insets);
+			}
+			return insets;
 		}
 
 		public void setGrabbedSurface(final Surface grabbed) {
@@ -563,6 +576,19 @@ public class ToplevelActivity extends Activity {
 	 * resolve android.view.WindowInsets$Type while running on API 29.
 	 */
 	private static final class Api30Insets {
+		/**
+		 * WindowInsets.CONSUMED only exists from API 30. The field is read
+		 * reflectively so the class still loads (and the method still returns
+		 * the right object) on API 29, which is what compileSdkVersion targets.
+		 */
+		static WindowInsets consumed(WindowInsets fallback) {
+			try {
+				return (WindowInsets) WindowInsets.class.getField("CONSUMED").get(null);
+			} catch (Throwable ignored) {
+				return fallback;
+			}
+		}
+
 		static int imeBottom(WindowInsets insets, int fallback) {
 			try {
 				Object imeType = Class.forName("android.view.WindowInsets$Type")
