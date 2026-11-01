@@ -360,7 +360,16 @@ jobs:
           # offering only VNC/SDL -- or worse, offer GTK and then fail at
           # start up. Fail here instead of shipping that.
           OBJ=limbo-android-lib/src/main/jni/../obj/local/$BUILD_HOST
-          LIBS=limbo-android-x86/src/main/jniLibs/$BUILD_HOST
+          # Two different jniLibs trees exist and only one is a bug to miss:
+          #   * limbo-android-x86/src/main/jniLibs gets libqemu-system-*.so only
+          #     (SYNC_LIBS_X86), the engine this APK actually loads;
+          #   * limbo-android-lib/src/main/jniLibs is the library module's own
+          #     tree, which AGP packages into the APK as well, and that is where
+          #     INSTALL_LIBS/SYNC_LIBS put every dependency .so (libgtk-4,
+          #     libepoxy, libvirglrenderer and their transitive deps).
+          # Checking the app module for the GTK libs therefore always failed
+          # even when the build was correct.
+          LIBS=limbo-android-lib/src/main/jniLibs/$BUILD_HOST
           MISSING=0
 
           check() {
