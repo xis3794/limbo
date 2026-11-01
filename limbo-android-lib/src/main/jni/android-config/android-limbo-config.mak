@@ -102,7 +102,16 @@ VIRGL_INSTALL_DIR := $(LIMBO_JNI_ROOT)/virglrenderer/install-android
 
 # pkg-config search path for the optional stacks: the libs we build ourselves
 # must be found, and nothing from the host may leak in.
-OPT_PC_DIRS := $(LIMBO_JNI_ROOT)/pc:$(EPOXY_INSTALL_DIR)/lib/pkgconfig:$(GTK_INSTALL_DIR)/lib/pkgconfig:$(VIRGL_INSTALL_DIR)/lib/pkgconfig
+# Order matters: GTK's own dependencies (gio-2.0, gobject-2.0, gmodule-2.0,
+# glib-2.0) must resolve to the GLib 2.89 prefix that GTK was built against,
+# otherwise pkg-config walks gtk4.pc's Requires line and finds QEMU's 2.76.6
+# from $(LIMBO_JNI_ROOT)/pc first:
+#   Package dependency requirement 'glib-2.0 >= 2.84' could not be satisfied.
+#   Package 'gio-2.0', required by 'gtk4', not found
+# $(LIMBO_JNI_ROOT)/pc therefore comes last, and only supplies what the 2.89
+# prefix does not have (pixman, iconv shims).
+GLIB289_INSTALL_DIR := $(LIMBO_JNI_ROOT)/glib289/install-android
+OPT_PC_DIRS := $(GLIB289_INSTALL_DIR)/lib/pkgconfig:$(EPOXY_INSTALL_DIR)/lib/pkgconfig:$(GTK_INSTALL_DIR)/lib/pkgconfig:$(VIRGL_INSTALL_DIR)/lib/pkgconfig:$(LIMBO_JNI_ROOT)/pc
 
 $(info USE_GTK = $(USE_GTK))
 $(info USE_VIRGL = $(USE_VIRGL))

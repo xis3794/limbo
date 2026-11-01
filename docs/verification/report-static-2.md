@@ -518,7 +518,9 @@ $ unzip -l /tmp/apk2/Limbo.apk | grep -E "libgtk-4|libepoxy|libvirglrenderer"
 | `cc9b52e` | `virgl_util.c:371` u64 | 已由 `b2dd2c8` 预修 | ✅ |
 | `b2dd2c8` | GTK4: glib >= 2.84 不满足 + `glib/hack.patch` 缺失 | §6.5 C-1 | ✅ `2181ab7` 引入 glib 2.89.3 |
 | `2181ab7` | **gdk-pixbuf**: `Program glib-compile-resources found: NO` → 回退 glib wrap → 仍撞 `hack.patch` 缺失 | §8.1 | ✅ `bc368b5` 把 glib289/bin 加入 PATH |
-| `bc368b5` | 🔴 **`Exec format error`**：arm64 的 `glib-compile-resources` 被 x86_64 runner 执行 | §8.3 | ⏳ 未修（HEAD 仍 `bc368b5`） |
+| `bc368b5` | 🔴 **`Exec format error`**：arm64 的 `glib-compile-resources` 被 x86_64 runner 执行 | §8.2 | ⚠️ `6525dc4` 尝试 native_file，**未生效** |
+| `6525dc4` | 🔴 同上，**原样复现**：native_file 只帮到 gdk-pixbuf，GTK 经 pkg-config 变量仍取 aarch64 工具 | §8.2（精确根因） | ⏳ 未修（HEAD `6525dc4`） |
+| `bc47ebf` | 针对上述根因改用 pkg-config wrapper（`host-pkg-config.sh`）隔离 build-machine 查找 | §8.2 | ⏳ run 未出（HEAD `bc47ebf`） |
 
 ### 8.1 `2181ab7` 的失败点：glib 构建期程序找不到
 
@@ -555,7 +557,31 @@ $ unzip -l /tmp/apk2/Limbo.apk | grep -E "libgtk-4|libepoxy|libvirglrenderer"
 
 **修法建议（供 Lead 决定）**：交叉编译 GLib 时，构建期工具必须走 `native: true` 的 tools 子项目，或提供 `exe_wrapper`（qemu-user），或显式指向宿主自带的 `glib-compile-resources`/`glib-mkenums`。**这不是 PATH 问题**，PATH 已解决「找到」，现在是「找到的不能执行」——下一个必须修的阻断点。**
 
-✅ **印证（我定稿期间上游已按此方向修复）**：提交 `6525dc4`（"run GTK's GLib helper programs on the build machine"）采用 **`native_file`** 方案 —— 新建 `gtk4-native.txt`（`cpu_family=x86_64`、`pkgconfig=/usr/bin/pkg-config`），用 `--native-file` 让 meson 用宿主工具链解析构建期程序；CI 同时 `apt-get install libglib2.0-dev-bin`（`build.yml:122`），并在脚本里加 `command -v glib-compile-resources` 存在性校验。这正是 §8.2 建议的「native tools / 宿主工具」路径，说明该定位准确。
+⚠️ **但修复未生效（run 41266376062 实测）**：`6525dc4` 的 `native_file` **只对 gdk-pixbuf 那一路生效**，GTK 自己仍解析到 aarch64 版本，`Exec format error` **原样复现**：
+
+```
+31054: FAILED: [code=126] gdk/gdkresources.c
+31055: .../glib289/install-android/bin/glib-compile-resources gdk/gdk.gresource.xml ...
+31056: /bin/sh: 1: .../glib-compile-resources: Exec format error
+31061: make[2]: *** [Makefile:368: gtk] Error 126
+```
+
+关键对照（同一次配置，两处解析结果不同）：
+
+```
+7632: gdk-pixbuf| Program glib-compile-resources found: YES (/usr/bin/glib-compile-resources)   ← 正确
+7822: Program glib-compile-resources found: YES (/usr/bin/glib-compile-resources)              ← 正确
+7832: Build-time dependency gio-2.0 found: YES 2.89.3                                          ← 问题在这里
+7833: Program .../glib289/install-android/bin/glib-compile-resources found: YES (...)          ← 仍是 aarch64
+7839: Program .../glib289/install-android/bin/glib-genmarshal found: YES (...)                 ← 仍是 aarch64
+```
+
+**精确根因**：GTK 的 `gdk/meson.build` 用 `Build-time dependency gio-2.0` 取 **pkg-config 变量**来定位 `glib-compile-resources`（而不是 `find_program()`）。`native_file` 只影响 `find_program()` 的搜索、不影响 `dependency(..., native:true).get_variable()` 指向的路径 —— 而 `gio-2.0` 的 `.pc` 来自 **glib289 交叉前缀**，其 `glib_compile_resources=` 变量硬编码为 `install-android/bin/glib-compile-resources`（aarch64）。
+所以修法需针对这一点：要么在 native_file 里覆盖该 pkg-config 变量，要么让 GTK 用 `find_program()` 找到的宿主工具，要么给 glib289 的 `.pc` 提供一个 build-machine 变体。
+
+✅ **再次印证**：提交 `bc47ebf`（"hide the target pkg-config prefix from build-machine lookups"）正是按此根因修复 —— 生成 `host-pkg-config.sh` wrapper（只暴露 `/usr/lib/x86_64-linux-gnu/pkgconfig` 等宿主目录），并把 native_file 的 `pkgconfig` 指向它，从而让 build-machine 的 `gio-2.0` 解析到宿主包而非 2.89 交叉前缀。诊断与修法完全对上。
+
+
 
 ### 8.3 pixman 情况（更正我先前的一个怀疑）
 
@@ -566,19 +592,19 @@ $ unzip -l /tmp/apk2/Limbo.apk | grep -E "libgtk-4|libepoxy|libvirglrenderer"
 
 1. **未做真实编译**。`javac 17` 可用，但本机**没有** `android.jar`、androidx、material、recyclerview 的任何 jar（`find / -name android.jar` 无结果），没有 `aapt2`/`d8`。`javalang` 只验语法不验语义。因此：类型错误、`R.*` 资源 ID 的存在性、`@style/@attr` 是否被 material 1.1.0 提供、方法签名不匹配等，**全未验证**。
 2. **`javalang` 的局限**：它对 Java 8 之后语法也接受，所以「83/83 通过」只证明括号/结构合法，**不能**替代「Java 8 语言级别合规」。Java 8 违规我另用 regex 扫描（`var`/`->`/`record`/`"""`/匿名类钻石）仍为 0，但 regex 本身不是完备的语法分析。
-3. **CI 全部止步于 step 12**。GTK/GPU artifact 断言（step 15）、Gradle 构建（step 16）、签名（17）、上传（18）**在所有轮次里全部 skipped**，无一执行。最新一轮（`bc368b5`）虽首次进入 GTK 的 `ninja` 编译（推进到 `[880/3158]`），仍失败于 §8.2 的 `Exec format error`。
+3. **CI 全部止步于 step 12**。GTK/GPU artifact 断言（step 15）、Gradle 构建（step 16）、签名（17）、上传（18）**在所有轮次里全部 skipped**，无一执行。`bc368b5`/`6525dc4` 虽首次进入 GTK 的 `ninja` 编译（推进到 `[880/3158]`），仍失败于 §8.2 的 `Exec format error`（`6525dc4` 的 native_file 修复未覆盖该路径，见 §8.2）。
 4. **无 APK 可验**。artifacts=0；本地 4 个 APK 均为 10-31 的旧产物，不含 GTK/exp。
 5. **GTK/GPU 真机行为**：`-display gtk` 是否真起窗、`gl=on` 在 HUAWEI CTR-AL00 (API 31, 无 KVM) 是否可用、GDK android 后端 `AMotionEvent_fromJava` 是否被 NDK r23b + API 31 sysroot 正确导出 —— 全部未验证，且被 C-1 阻断。
 6. **DB 迁移**：`UI` 列在升级后的实际表现、P2 修复后既有机器配置是否被正确重写 —— 未验证（需真机）。
 7. **P6/P7 的运行时行为**：单线程分析不能证明「无 ANR/无时序竞争」；`singleTask` 下 `onNewIntent` 是否真被调用、extras 是否丢，需真机 logcat 确认。
-8. **文件仍在变动**：验证期间 HEAD 从 `cc9b52e` 一路推进到 `bc368b5`（共 4 个提交、6 轮 run）。若 Lead 继续提交，本报告 §3~§4 的行号可能失效，请以 §快照指纹 的 SHA1 判断。
+8. **文件仍在变动**：验证期间 HEAD 从 `cc9b52e` 一路推进到 `6525dc4`（5 个提交、7 轮 run），每轮都换一个失败点。若 Lead 继续提交，本报告 §3~§4 的行号可能失效，请以 §快照指纹 的 SHA1 判断。
 9. **`/tmp/qemu1100` 的坑**：它不是 pristine 完整树，**任何用它的补丁复验都会得到假阴性**。建议后续统一用 `/tmp/qemu1100pristine/qemu-11.0.0`（78380 文件）。
 
 ---
 
 ## 10. 建议 Lead 的处理顺序
 
-1. **🔴 C-5（最高优先，当前唯一活跃阻断）** —— `glib-compile-resources` 等构建期工具是 aarch64 二进制，宿主跑不了。修法：给 `scripts/build_glib289.sh` 的 cross file 加 `exe_wrapper`（qemu-user）或改为 `native: true` 编译 tools 子项目，或让 meson 用宿主自带的工具。**注意 C-1 的 glib 版本问题已由 `2181ab7` 解决，现在卡的是工具可执行性，不是版本。**
+1. **🔴 C-5（最高优先，当前唯一活跃阻断）** —— `glib-compile-resources` 等构建期工具是 aarch64 二进制，宿主跑不了。**`6525dc4` 的 native_file 只修好了 gdk-pixbuf 一路，GTK 自身的 `gdk/meson.build` 是经 `Build-time dependency gio-2.0` 的 pkg-config 变量取工具路径，绕过了 native_file，因此仍取 aarch64 版本（run 41266376062 实测复现）。** 修法：覆盖该 pkg-config 变量 / 让 GTK 改用 find_program 的宿主工具 / 给 glib289 的 `.pc` 提供 build-machine 变体。仅加 native_file 不够。
 2. **C-1 的残留（hack.patch）** —— `glib.wrap` 的 `diff_files=glib/hack.patch` 与 `revision=main` 仍在；一旦任何路径回落到 glib wrap 就会再次撞「文件不存在」。建议补齐该 patch 或钉死 revision/禁用该 wrap（C-3）。
 3. **P6-a（停止标志改到 `onResume` 或补 `onNewIntent`）** —— 一行级别的结构性修正，但对「后台 GTK 窗口能否从首页停止」影响很大。
 4. **C-2（补 `classes.dex` 断言）** —— 验收标准 3 现在完全没有守门，建议在 APK 步骤后加 `unzip -p classes*.dex | grep` 或 `dexdump` 断言。
