@@ -576,6 +576,22 @@ public class LimboActivity extends AppCompatActivity
                 if (getMachine() == null)
                     return;
                 String ui = (String) ((ArrayAdapter<?>) mUI.getAdapter()).getItem(position);
+                // Guard against silently rewriting a backend this build cannot
+                // offer. A machine can legitimately be saved as GTK on a build
+                // (or device) where GTK is unavailable: the spinner then has no
+                // entry for it, SpinnerAdapter#setDiskAdapterValue falls back to
+                // position 0 (VNC) and this callback used to store "VNC", so
+                // merely opening the configuration page converted the machine
+                // to a remote console. Keep the saved value in that case.
+                String stored = Config.normalizeUI(getMachine().getUI());
+                if (ui == null || stored.equals(ui)) {
+                    return;
+                }
+                if (Config.UI_GTK.equals(stored) && !Config.isGtkUsable()) {
+                    // The backend is only unavailable on this build/device, not
+                    // a user decision: do not touch it.
+                    return;
+                }
                 notifyFieldChange(MachineProperty.UI, ui);
             }
 

@@ -1,0 +1,33 @@
+Android's bionic libc never implemented the C11 pthread_barrier_* family:
+it is missing from every API level the NDK ships, and there is no
+libc symbol to link against. Mesa's u_thread.h gates its barrier on
+
+    #if defined(HAVE_PTHREAD) && !defined(__APPLE__) && !defined(__HAIKU__)
+
+which excludes Apple and Haiku but not Android, so an Android build takes
+the pthread_barrier_t branch and fails:
+
+    error: unknown type name 'pthread_barrier_t'; did you mean 'pthread_attr_t'?
+    error: implicit declaration of function 'pthread_barrier_init'
+
+The very next #else branch implements barriers with a mutex + condvar
+through the vendored C11 threads shim (src/mesa/compat/c11/threads_posix.h,
+which is a thin pthread wrapper), so it works on bionic unchanged.
+Excluding Android from the first branch is therefore enough.
+
+Only the barrier guard is touched: an identical guard a few lines above
+(in util_thread_get_time_nano) selects pthread_getcpuclockid, which bionic
+DOES provide, so it must keep taking the pthread branch.
+
+diff --git a/src/mesa/util/u_thread.h b/src/mesa/util/u_thread.h
+--- a/src/mesa/util/u_thread.h
++++ b/src/mesa/util/u_thread.h
+@@ -282,7 +282,7 @@
+  * util_barrier
+  */
+ 
+-#if defined(HAVE_PTHREAD) && !defined(__APPLE__) && !defined(__HAIKU__)
++#if defined(HAVE_PTHREAD) && !defined(__APPLE__) && !defined(__HAIKU__) && !defined(__ANDROID__)
+ 
+ typedef pthread_barrier_t util_barrier;
+ 

@@ -24,6 +24,7 @@ import android.util.Log;
 
 import com.max2idea.android.limbo.machine.MachineAction;
 import com.max2idea.android.limbo.machine.MachineController;
+import com.max2idea.android.limbo.toast.ToastUtils;
 
 import org.gtk.android.ToplevelActivity;
 
@@ -43,8 +44,26 @@ import org.gtk.android.ToplevelActivity;
 public class LimboGtkActivity extends ToplevelActivity {
     private static final String TAG = "LimboGtkActivity";
 
+    /**
+     * Set when this activity is opened only to issue a shutdown request for an
+     * already running VM (the HomeController "stop immediately" path). The SDL
+     * host carries the equivalent intent in
+     * {@code LimboSDLActivity.pendingStopImmediate}; GTK needs its own copy.
+     */
+    private boolean stopRequestedFromHome;
+
+    /** Called from the home dashboard before launching this host to stop a VM. */
+    private static boolean sPendingStopFromHome;
+
+    /** Arms a shutdown for the next {@link #onCreate} of this host. */
+    public static void requestStopOnNextOpen() {
+        sPendingStopFromHome = true;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        stopRequestedFromHome = sPendingStopFromHome;
+        sPendingStopFromHome = false;
         // The GDK android backend keeps the last activity it was initialised
         // with. When a VM is started a second time in the same process, a
         // finished activity would still be cached and GDK would spawn a stock
@@ -60,6 +79,23 @@ public class LimboGtkActivity extends ToplevelActivity {
         if (MachineController.getInstance().isRunning()) {
             notifyAction(MachineAction.UPDATE_NOTIFICATION,
                     getString(com.limbo.emu.lib.R.string.VMRunning));
+            // Stop requested from the home dashboard while a GTK window was in
+            // the background: QEMU's main loop can be blocked by a suspended
+            // display thread, so the shutdown request issued earlier may never
+            // be processed. Now that the window is back in the foreground, ask
+            // again from here. (SDL carries the same intent in the static
+            // LimboSDLActivity.pendingStopImmediate, which this host never
+            // reads, so it must not rely on that flag.)
+            if (stopRequestedFromHome) {
+                stopRequestedFromHome = false;
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                stopVmFromHome();
+                            }
+                        }, 1200);
+            }
             // If the machine is paused, GTK's window still comes up; the guest is
             // resumed by the regular continue path, not from here.
             return;
@@ -101,6 +137,29 @@ public class LimboGtkActivity extends ToplevelActivity {
         if (listener != null) {
             listener.onAction(action, value);
         }
+    }
+
+    /**
+     * Shutdown requested from the home dashboard. Mirrors
+     * {@code LimboSDLActivity#stopVmFromHome}: QEMU only posts a shutdown
+     * request, so it is safe to call from the UI thread, and a force-close
+     * prompt follows if the guest does not react.
+     */
+    private void stopVmFromHome() {
+        if (!MachineController.getInstance().isRunning()) {
+            return;
+        }
+        ToastUtils.toastShort(this, getString(com.limbo.emu.lib.R.string.screen_stopping));
+        MachineController.getInstance().requestStop();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        if (MachineController.getInstance().isRunning()) {
+                            Log.w(TAG, "Guest did not stop after the shutdown request");
+                        }
+                    }
+                }, 12000);
     }
 
     @Override

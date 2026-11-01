@@ -372,11 +372,18 @@ public class HomeController implements
                     // Reuse whatever local window backend this machine uses so
                     // the stop request is issued from the activity that owns
                     // the guest surface.
-                    LimboSDLActivity.pendingStopImmediate = true;
                     String ui = Config.normalizeUI(
                             MachineController.getInstance().getMachine().getUI());
-                    Class<?> target = Config.UI_GTK.equals(ui) && Config.isGtkUsable()
-                            ? LimboGtkActivity.class : LimboSDLActivity.class;
+                    boolean gtk = Config.UI_GTK.equals(ui) && Config.isGtkUsable();
+                    if (gtk) {
+                        // The GTK host cannot read LimboSDLActivity's static
+                        // flag; it carries the same intent in its own hand-off.
+                        LimboGtkActivity.requestStopOnNextOpen();
+                    } else {
+                        // SDL consumes this flag from onResume().
+                        LimboSDLActivity.pendingStopImmediate = true;
+                    }
+                    Class<?> target = gtk ? LimboGtkActivity.class : LimboSDLActivity.class;
                     activity.startActivity(new Intent(activity, target));
                 }
             }
