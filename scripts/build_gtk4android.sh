@@ -109,6 +109,18 @@ PC_DIRS="$GLIB289_PC:$JNI/libepoxy/install/lib/pkgconfig"
 export PKG_CONFIG_PATH="$PC_DIRS"
 export PKG_CONFIG_LIBDIR="$PC_DIRS"
 
+# gdk-pixbuf (a GTK subproject) needs the glib-compile-resources *program*.
+# pkg-config only publishes libraries and headers, so the tool is found through
+# PATH; without it meson tries the glib wrap as a program provider and dies on
+# the missing subprojects/packagefiles/glib/hack.patch. Put the 2.89 prefix
+# first so its glib tools win over anything the runner has installed.
+GLIB289_BIN="$JNI/glib289/install-android/bin"
+if [ ! -x "$GLIB289_BIN/glib-compile-resources" ]; then
+  echo "ERROR: $GLIB289_BIN/glib-compile-resources missing (GTK subprojects need it)" >&2
+  exit 1
+fi
+export PATH="$GLIB289_BIN:$PATH"
+
 cd "$SRC"
 meson setup "$BUILD" . \
   --cross-file "$JNI/gtk4-cross.txt" \
