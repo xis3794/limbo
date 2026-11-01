@@ -1214,6 +1214,30 @@ public class LimboActivity extends AppCompatActivity
         } catch (Exception ignored) {
         }
         super.onCreate(savedInstanceState);
+
+        // Opt-in experimental UI. The redirect lives here, after super.onCreate(),
+        // for three reasons:
+        //   * an early return before super.onCreate() throws
+        //     SuperNotCalledException and kills the process on launch;
+        //   * every architecture has its own launcher subclass (LimboEmuActivity
+        //     and friends) but they all funnel into this method, so one hook
+        //     covers them all;
+        //   * when the legacy screen is opened for a specific machine
+        //     (EXTRA_MACHINE set, i.e. "edit this VM"), that explicit intent wins
+        //     and the legacy configuration page is shown - otherwise the
+        //     experimental list could never hand a machine back to the editor.
+        // The guard on EXTRA_MACHINE also stops the bounce loop
+        // legacy -> experimental -> legacy -> experimental.
+        if (savedInstanceState == null
+                && getIntent() != null
+                && getIntent().getStringExtra(EXTRA_MACHINE) == null
+                && com.max2idea.android.limbo.ui.exp.ExpPrefs.experimentalUi(this)) {
+            startActivity(new android.content.Intent(this,
+                    com.max2idea.android.limbo.ui.exp.LimboExperimentalActivity.class));
+            finish();
+            return;
+        }
+
         setupAppEnvironment();
         clearNotifications();
         setupStrictMode();
@@ -2148,8 +2172,26 @@ public class LimboActivity extends AppCompatActivity
      * This is done so that the java SDL part is initialized prior to starting the vm.
      */
     public void startSDL() {
-        Intent intent = new Intent(LimboActivity.this, LimboSDLActivity.class);
+        Intent intent = new Intent(LimboActivity.this, localDisplayActivityClass());
         startActivityForResult(intent, Config.SDL_REQUEST_CODE);
+    }
+
+    /**
+     * Activity that hosts the local guest window for this machine.
+     *
+     * <p>SDL and GTK both run QEMU in-process and both need their own host
+     * activity, but they share the rest of the start/stop plumbing
+     * (pendingStop/pendingPause handshakes, startActivityForResult code).
+     * Machines configured for GTK get LimboGtkActivity, everything else -
+     * including a GTK machine whose engine or device cannot run GTK - keeps
+     * getting the historical LimboSDLActivity.
+     */
+    private Class<?> localDisplayActivityClass() {
+        String ui = Config.normalizeUI(getMachine().getUI());
+        if (Config.UI_GTK.equals(ui) && Config.isGtkUsable()) {
+            return LimboGtkActivity.class;
+        }
+        return LimboSDLActivity.class;
     }
 
     /**
@@ -2825,7 +2867,7 @@ public class LimboActivity extends AppCompatActivity
         if (clear || getMachine() == null || mMachine.getSelectedItemPosition() < 2)
             mUISectionSummary.setText("");
         else {
-            String text = getString(R.string.display) + ": " + (getMachine().getEnableVNC() == 1 ? "VNC" : "SDL");
+            String text = getString(R.string.display) + ": " + getMachine().getUI();
             if (getMachine().getEnableVNC() == 1) {
                 text += ", " + getString(R.string.server);
                 text += ": " + NetworkUtils.getVNCAddress(this) + ":" + Config.defaultVNCPort;
@@ -3166,7 +3208,7 @@ public class LimboActivity extends AppCompatActivity
         SpinnerAdapter.setDiskAdapterValue(mNetConfig, getMachine().getNetwork());
         SpinnerAdapter.setDiskAdapterValue(mVGAConfig, getMachine().getVga());
         SpinnerAdapter.setDiskAdapterValue(mSoundCard, getMachine().getSoundCard());
-        SpinnerAdapter.setDiskAdapterValue(mUI, getMachine().getEnableVNC() == 1 ? "VNC" : "SDL");
+        SpinnerAdapter.setDiskAdapterValue(mUI, getMachine().getUI());
         SpinnerAdapter.setDiskAdapterValue(mMouse, fixMouseValue(getMachine().getMouse()));
         SpinnerAdapter.setDiskAdapterValue(mKeyboard, getMachine().getKeyboard());
 

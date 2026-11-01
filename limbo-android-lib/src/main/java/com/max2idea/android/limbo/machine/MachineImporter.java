@@ -76,9 +76,10 @@ public class MachineImporter {
                                 mach.setName(machineAttr[i].replace("\"", ""));
                                 break;
                             case "UI":
-                                String ui = machineAttr[i].replace("\"", "");
-                                if (ui.equals("VNC"))
-                                    mach.setEnableVNC(1);
+                                // Restore the exact backend. This used to
+                                // handle VNC only, so an exported GTK machine
+                                // came back as SDL after an import.
+                                mach.setUI(machineAttr[i].replace("\"", ""));
                                 break;
                             case "PAUSED":
                                 mach.setPaused(Integer.parseInt(machineAttr[i].replace("\"", "")));

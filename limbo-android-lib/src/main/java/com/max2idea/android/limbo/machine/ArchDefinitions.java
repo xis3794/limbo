@@ -105,6 +105,18 @@ public class ArchDefinitions {
             vgaValues.add("virtio-gpu-pci");
         }
 
+        // GPU accelerated virtio-gpu: only when the engine in use was built
+        // with CONFIG_OPENGL + virglrenderer (Config.isVirglUsable()). Offering it
+        // from a --disable-opengl build makes QEMU abort with
+        // "virtio-gpu-gl-pci: unknown device" at start up.
+        boolean virtioGpuHost = LimboApplication.arch == Config.Arch.x86
+                || LimboApplication.arch == Config.Arch.x86_64
+                || LimboApplication.arch == Config.Arch.arm
+                || LimboApplication.arch == Config.Arch.arm64;
+        if (virtioGpuHost && Config.isVirglUsable()) {
+            vgaValues.add("virtio-gpu-gl-pci");
+        }
+
         //XXX: some archs don't support vga on QEMU like SPARC64
         vgaValues.add("nographic");
 
@@ -139,9 +151,15 @@ public class ArchDefinitions {
 
     public static ArrayList<String> getUIValues() {
         ArrayList<String> arrList = new ArrayList<>();
-        arrList.add("VNC");
+        arrList.add(Config.UI_VNC);
         if (Config.enable_SDL)
-            arrList.add("SDL");
+            arrList.add(Config.UI_SDL);
+        // GTK is a local window backend like SDL (not a remote console). It is
+        // hidden unless the QEMU engine in use was really built with it, and
+        // GTK's GDK android backend needs API 31+ (Config.isGtkUsable()).
+        if (Config.isGtkUsable()) {
+            arrList.add(Config.UI_GTK);
+        }
         return arrList;
     }
 

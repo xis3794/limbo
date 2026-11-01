@@ -115,10 +115,11 @@ public class Dispatcher implements ViewListener {
 
 
     private void changeUi(String ui) {
-        if (ui.equals("VNC"))
-            getMachine().setEnableVNC(1);
-        else if (ui.equals("SDL"))
-            getMachine().setEnableVNC(0);
+        // Machine#setUI normalises the value and keeps the legacy enableVNC
+        // flag in sync, so VNC / SDL / GTK all go through one path. Unknown or
+        // empty values fall back to SDL instead of being silently dropped
+        // (which used to leave a GTK selection unsaved).
+        getMachine().setUI(ui);
     }
 
     private void setCpuNum(int cpuNum) {

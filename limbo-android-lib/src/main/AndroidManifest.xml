@@ -59,6 +59,18 @@
             android:theme="@style/LimboMainTheme"
             android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize"
             android:label="Settings" />
+        <activity
+            android:name="com.max2idea.android.limbo.ui.exp.LimboExperimentalActivity"
+            android:exported="false"
+            android:label="@string/exp_title"
+            android:theme="@style/Theme.MaterialComponents.NoActionBar" />
+        <activity
+            android:name="com.max2idea.android.limbo.main.LimboGtkActivity"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
         <service
             android:name="com.max2idea.android.limbo.machine.MachineService"
             android:enabled="true"

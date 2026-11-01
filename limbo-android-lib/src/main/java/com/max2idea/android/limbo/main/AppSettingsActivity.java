@@ -171,6 +171,31 @@ public class AppSettingsActivity extends AppCompatActivity {
         addSwitch(display, R.drawable.ic_machine,
                 R.string.PreventMouseOutOfBounds, R.string.PreventMouseDescr,
                 "preventMouseOutOfBounds", false, null);
+        // GTK and GPU acceleration are gated on what this APK's QEMU build
+        // actually contains (resolved by DisplayBackendProbe at start up).
+        // Switching them on never changes an existing machine: the backend is
+        // a per-machine setting, so these only decide which options the
+        // configuration spinners offer.
+        if (Config.engineHasGtk && Build.VERSION.SDK_INT >= 31) {
+            addSwitch(display, R.drawable.ic_nav_screen,
+                    R.string.gtk_backend, R.string.gtk_backend_summary,
+                    DisplayBackendProbe.PREF_GTK, true, new CompoundButton.OnCheckedChangeListener() {
+                        @Override
+                        public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                            Config.enableGtk = isChecked;
+                        }
+                    });
+        }
+        if (Config.engineHasVirgl) {
+            addSwitch(display, R.drawable.ic_nav_screen,
+                    R.string.gpu_accel, R.string.gpu_accel_summary,
+                    DisplayBackendProbe.PREF_VIRGL, true, new CompoundButton.OnCheckedChangeListener() {
+                        @Override
+                        public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                            Config.enableVirgl = isChecked;
+                        }
+                    });
+        }
         addSlider(display, R.drawable.ic_ui,
                 R.string.keyPressDelay, R.string.keyPressDelaySummary, "keyPressDelay", 100);
         addSlider(display, R.drawable.ic_machine,
@@ -184,6 +209,13 @@ public class AppSettingsActivity extends AppCompatActivity {
         addSwitch(advanced, R.drawable.ic_info,
                 R.string.IgnoreBreakpointInvalidation, R.string.IgnoreBreakpointInvalidationSummary,
                 "ignoreBreakpointInvalidation", false, null);
+        // Experimental UI. This key is the one com.max2idea.android.limbo.ui.exp
+        // reads, and the redirect itself lives in LimboActivity#onCreate so
+        // every architecture launcher is covered. The toggle is off by default
+        // and the legacy screens stay untouched while it is off.
+        addSwitch(advanced, R.drawable.ic_ui,
+                R.string.exp_settings_ui_title, R.string.exp_settings_ui_summary,
+                "experimentalUi", false, null);
 
         // Network
         LinearLayout network = addSection(R.string.section_network);

@@ -232,6 +232,40 @@ private String getQemuLibrary() {
 
             paramsList.add("-parallel");
             paramsList.add("none");
+
+            // Local display backend.
+            //
+            // Historically nothing was emitted here: QEMU had exactly one
+            // compiled display backend (SDL), so leaving -display out let it
+            // pick that one and every shipped build behaved identically. A
+            // build can now contain both SDL and GTK, and GPU acceleration
+            // needs ",gl=on", so the flag is emitted only when it actually
+            // changes what QEMU does. The plain SDL case keeps the previous
+            // command line byte for byte, which is the safest option given
+            // that SDL is the default backend for every existing machine.
+            String ui = Config.normalizeUI(getMachine().getUI());
+            // ",gl=on" is only requested when the guest actually uses a GL
+            // capable video device. Turning it on for every existing SDL
+            // machine would silently change their start up path, and a
+            // virtio-gpu-gl device needs it while nothing else benefits.
+            boolean glGuest = usesGlVideoDevice();
+            if (Config.UI_GTK.equals(ui) && Config.isGtkUsable()) {
+                // GTK requires LimboGtk.init() to hand the GDK android backend
+                // this activity's Surface before the VM starts.
+                paramsList.add("-display");
+                paramsList.add(glGuest && Config.isVirglUsable() ? "gtk,gl=on" : "gtk");
+            } else if ((glGuest && Config.isVirglUsable()) || Config.UI_GTK.equals(ui)) {
+                // Two cases need an explicit backend here:
+                //  * GPU acceleration for a GL guest: ",gl=on" cannot be
+                //    expressed otherwise.
+                //  * A machine saved as GTK on a build/device where GTK is not
+                //    usable (engine without it, or API < 31). Leaving -display
+                //    out would let QEMU fall back to whichever backend it lists
+                //    first, i.e. possibly GTK, and abort. Asking for SDL keeps
+                //    the machine startable instead.
+                paramsList.add("-display");
+                paramsList.add(glGuest && Config.isVirglUsable() ? "sdl,gl=on" : "sdl");
+            }
         }
 
         if (getMachine().getKeyboard() != null) {
@@ -834,11 +868,29 @@ private String getQemuLibrary() {
         return null;
     }
 
+    /**
+     * Whether this machine asks for a GPU/virgl video device.
+     *
+     * <p>Drives whether ",gl=on" is added to -display. Kept separate so plain
+     * SDL machines keep the exact command line they always had.
+     */
+    private boolean usesGlVideoDevice() {
+        String vga = getMachine().getVga();
+        return vga != null && (vga.equals("virtio-gpu-gl-pci")
+                || vga.startsWith("virtio-gpu-gl"));
+    }
+
     private void addGraphicsOptions(ArrayList<String> paramsList) {
         if (getMachine().getVga() != null) {
             if (getMachine().getVga().equals("Default")) {
                 //do nothing
             } else if (getMachine().getVga().equals("virtio-gpu-pci")) {
+                paramsList.add("-device");
+                paramsList.add(getMachine().getVga());
+            } else if (getMachine().getVga().equals("virtio-gpu-gl-pci")) {
+                // GPU accelerated virtio-gpu. The device is only present when
+                // the engine was built with CONFIG_VIRGL (see
+                // ArchDefinitions#getVGAValues), which also implies CONFIG_OPENGL.
                 paramsList.add("-device");
                 paramsList.add(getMachine().getVga());
             } else if (getMachine().getVga().equals("nographic")) {

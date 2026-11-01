@@ -289,7 +289,13 @@ public class HomeController implements
                 if (MachineController.getInstance().isVNCEnabled()) {
                     activity.startActivity(new Intent(activity, VncActivity.class));
                 } else {
-                    activity.startActivity(new Intent(activity, LimboSDLActivity.class));
+                    // Local window: GTK machines need the GTK host activity,
+                    // everything else keeps the historical SDL one.
+                    String ui = Config.normalizeUI(
+                            MachineController.getInstance().getMachine().getUI());
+                    Class<?> target = Config.UI_GTK.equals(ui) && Config.isGtkUsable()
+                            ? LimboGtkActivity.class : LimboSDLActivity.class;
+                    activity.startActivity(new Intent(activity, target));
                 }
             }
         });
@@ -363,8 +369,15 @@ public class HomeController implements
                     return;
                 }
                 if (MachineController.getInstance().isRunning()) {
+                    // Reuse whatever local window backend this machine uses so
+                    // the stop request is issued from the activity that owns
+                    // the guest surface.
                     LimboSDLActivity.pendingStopImmediate = true;
-                    activity.startActivity(new Intent(activity, LimboSDLActivity.class));
+                    String ui = Config.normalizeUI(
+                            MachineController.getInstance().getMachine().getUI());
+                    Class<?> target = Config.UI_GTK.equals(ui) && Config.isGtkUsable()
+                            ? LimboGtkActivity.class : LimboSDLActivity.class;
+                    activity.startActivity(new Intent(activity, target));
                 }
             }
         }, 4000);

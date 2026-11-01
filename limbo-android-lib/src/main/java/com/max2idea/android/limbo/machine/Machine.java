@@ -34,6 +34,11 @@ public class Machine extends Observable {
     private String keyboard = Config.defaultKeyboardLayout;
     private String mouse = "ps2";
     private int enableVNC;
+    /**
+     * Local display backend ("SDL" / "GTK") or "VNC" for the headless remote
+     * console. Null means "never set" which falls back to the enableVNC flag.
+     */
+    private String ui;
     private String arch;
     private String machineType;
     private String cpu = "Default";
@@ -109,12 +114,69 @@ public class Machine extends Observable {
         return enableVNC;
     }
 
+    /**
+     * Sets the legacy "headless remote console" flag.
+     *
+     * <p>Leaving VNC selects SDL, which is what this flag always meant, but it
+     * must not stomp an explicit GTK selection: several legacy callers clear
+     * the flag unconditionally (e.g. after a successful start) and that used
+     * to be the only way a machine could stop being VNC.
+     */
     void setEnableVNC(int enableVNC) {
-        if (this.enableVNC != enableVNC) {
-            this.enableVNC = enableVNC;
-            setChanged();
-            notifyChanged(MachineProperty.UI, enableVNC);
+        if (this.enableVNC == enableVNC) {
+            return;
         }
+        this.enableVNC = enableVNC;
+        String value;
+        if (enableVNC == 1) {
+            value = Config.UI_VNC;
+        } else if (Config.UI_GTK.equals(this.ui)) {
+            // Keep the GTK backend the user picked.
+            setChanged();
+            notifyChanged(MachineProperty.UI, this.ui);
+            return;
+        } else {
+            value = Config.UI_SDL;
+        }
+        this.ui = value;
+        setChanged();
+        notifyChanged(MachineProperty.UI, value);
+    }
+
+    /**
+     * Local display backend or remote console for this machine.
+     *
+     * <p>One of {@link Config#UI_VNC}, {@link Config#UI_SDL} or
+     * {@link Config#UI_GTK}. The value lives in the TEXT UI column of the
+     * machine table, so the third backend needs no schema migration: rows
+     * written by older builds ("VNC"/"SDL") load unchanged.
+     *
+     * <p>{@link #getEnableVNC()} remains the single source of truth for
+     * "headless machine viewed over the network" because every existing caller
+     * (MachineController#isVNCEnabled, the VM start path, the audio bridge
+     * fallback) keys off it. GTK is a local backend, so it reports 0 there
+     * exactly like SDL does.
+     */
+    public String getUI() {
+        if (ui != null && !ui.trim().isEmpty()) {
+            return ui;
+        }
+        // Instances that were never given an explicit backend keep the
+        // historical two-value encoding.
+        return enableVNC == 1 ? Config.UI_VNC : Config.UI_SDL;
+    }
+
+    void setUI(String ui) {
+        String value = Config.normalizeUI(ui);
+        if (this.ui != null && this.ui.equals(value)) {
+            return;
+        }
+        this.ui = value;
+        // Keep the legacy flag in sync so every isVNCEnabled() caller keeps
+        // working without knowing about the third backend.
+        this.enableVNC = Config.UI_VNC.equals(value) ? 1 : 0;
+        setChanged();
+        notifyChanged(MachineProperty.UI, value);
     }
 
     public String getArch() {

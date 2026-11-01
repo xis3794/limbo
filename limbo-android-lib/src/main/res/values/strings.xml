@@ -595,4 +595,9 @@
     <string name="last_vm_error_title">"The last virtual machine failed to start"</string>
     <string name="last_vm_error_ok">"OK"</string>
     <string name="no_boot_media_warning">"No disk image is configured. The virtual machine may not boot; select the image again under Storage."</string>
+    <string name="gtk_backend">GTK display backend</string>
+    <string name="gtk_backend_summary">Use GTK4 windows for the guest display instead of SDL. Requires Android 11+ and a QEMU build that includes GTK.</string>
+    <string name="gpu_accel">GPU acceleration (virgl)</string>
+    <string name="gpu_accel_summary">Render the guest with the device GPU through virtio-gpu-gl. Requires a QEMU build with OpenGL and virglrenderer.</string>
+    <string name="gtk_unavailable">This QEMU build has no GTK backend</string>
 </resources>

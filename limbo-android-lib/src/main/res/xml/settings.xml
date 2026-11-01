@@ -124,4 +124,14 @@
             android:summary="@string/IgnoreBreakpointInvalidationSummary"
             android:title="@string/IgnoreBreakpointInvalidation" />
     </PreferenceCategory>
+
+    <!-- Opt-in experimental features. Everything here is off by default and the
+         legacy behaviour must stay intact while these are false. -->
+    <PreferenceCategory android:title="@string/exp_settings_category">
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="experimentalUi"
+            android:summary="@string/exp_settings_ui_summary"
+            android:title="@string/exp_settings_ui_title" />
+    </PreferenceCategory>
 </PreferenceScreen>

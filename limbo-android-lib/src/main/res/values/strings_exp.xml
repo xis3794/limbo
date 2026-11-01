@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="exp_title">虚拟机</string>
+    <string name="exp_subtitle">选择机器以编辑，或直接启动</string>
+    <string name="exp_back_legacy">返回旧版界面</string>
+    <string name="exp_empty">还没有虚拟机\n点击右下角“＋”新建一台</string>
+    <string name="exp_add">新建</string>
+    <string name="exp_start">启动</string>
+    <string name="exp_running">运行中</string>
+    <string name="exp_machine_meta">%1$s · %2$d 核 · %3$d MB</string>
+    <string name="exp_unknown_arch">未知架构</string>
+    <string name="exp_config_unavailable">无法读取机器配置</string>
+    <string name="exp_unnamed_machine">未命名虚拟机</string>
+    <string name="exp_new_machine">新建虚拟机</string>
+    <string name="exp_machine_name_hint">输入机器名称</string>
+    <string name="exp_create">创建</string>
+    <string name="exp_cancel">取消</string>
+    <string name="exp_delete_title">删除虚拟机</string>
+    <string name="exp_delete_message">确定删除“%1$s”吗？此操作无法撤销。</string>
+    <string name="exp_delete">删除</string>
+    <string name="exp_settings_category">实验性功能</string>
+    <string name="exp_settings_ui_title">新版界面</string>
+    <string name="exp_settings_ui_summary">使用全新的虚拟机列表界面。关闭后立即回到旧版界面，旧版功能不受影响。</string>
+</resources>

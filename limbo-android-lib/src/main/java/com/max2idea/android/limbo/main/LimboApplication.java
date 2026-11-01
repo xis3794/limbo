@@ -227,6 +227,9 @@ public class LimboApplication extends Application {
         MachineOpenHelper.initialize(this);
         FavOpenHelper.initialize(this);
         setupFolders();
+        // Which optional display backends this APK's QEMU build really has.
+        // Must run before any spinner is populated (LimboActivity onResume).
+        DisplayBackendProbe.refresh(this);
         UiPrefs.applyTheme(this);
     }
 

@@ -121,6 +121,76 @@ public class Config {
     //Enable if you build with KVM support, needes android-21 platform
     public static boolean enableKVM = false;
     public static boolean enableAVX = true;
+
+    // ------------------------------------------------------------------
+    // Display backends
+    //
+    // UI_VNC is the headless remote console; UI_SDL and UI_GTK are local
+    // windows. The value is persisted in the TEXT UI column of the machine
+    // table, so adding a backend never needs a schema migration.
+    // ------------------------------------------------------------------
+    public static final String UI_VNC = "VNC";
+    public static final String UI_SDL = "SDL";
+    public static final String UI_GTK = "GTK";
+
+    /**
+     * Maps any stored or unknown value onto a known backend. Rows written
+     * before GTK existed only contain VNC or SDL, and a missing/blank column
+     * used to mean "SDL", so both keep their old meaning.
+     */
+    public static String normalizeUI(String ui) {
+        if (ui == null) {
+            return UI_SDL;
+        }
+        String trimmed = ui.trim();
+        if (UI_VNC.equalsIgnoreCase(trimmed)) {
+            return UI_VNC;
+        }
+        if (UI_GTK.equalsIgnoreCase(trimmed)) {
+            return UI_GTK;
+        }
+        return UI_SDL;
+    }
+
+    /**
+     * Whether the QEMU engine in use was built with the GTK display backend.
+     * Resolved at start up by DisplayBackendProbe (the presence of
+     * libgtk-4.so next to libqemu-system-*.so). This is a fact about the
+     * build, not a user preference.
+     */
+    public static boolean engineHasGtk = false;
+
+    /**
+     * Whether the QEMU engine was built with CONFIG_OPENGL and virglrenderer.
+     * Also a build fact, resolved by DisplayBackendProbe.
+     */
+    public static boolean engineHasVirgl = false;
+
+    /**
+     * User preference: offer GTK windows at all. Defaulted from the engine
+     * capability and persisted in settings, so a user can keep GTK available
+     * without it becoming a per-machine surprise.
+     */
+    public static boolean enableGtk = false;
+
+    /** User preference: offer GPU accelerated display options. */
+    public static boolean enableVirgl = false;
+
+    /**
+     * GTK's GDK android backend needs API 31+ (the AMotionEvent/AKeyEvent JNI
+     * helpers are only exported by libandroid.so from API 31 on), so an
+     * engine built with GTK still cannot be used on older devices.
+     */
+    public static boolean isGtkUsable() {
+        return enableGtk && engineHasGtk
+                && android.os.Build.VERSION.SDK_INT >= 31;
+    }
+
+    /** Whether virtio-gpu-gl devices and ,gl=on are available to the user. */
+    public static boolean isVirglUsable() {
+        return enableVirgl && engineHasVirgl;
+    }
+
     public static String storagedir = null;
     //Some OSes don't like emulated multi cores for QEMU 2.9.1 you can disable here
     /// thought there is also the Disable TSC feature so you don't have to do it here

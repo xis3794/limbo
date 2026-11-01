@@ -209,7 +209,10 @@ public class MachineOpenHelper extends SQLiteOpenHelper implements IMachineDatab
         stateValues.put(MachineProperty.EXTRA_PARAMS.name(), machine.getExtraParams());
         stateValues.put(MachineProperty.HOSTFWD.name(), machine.getHostFwd());
         stateValues.put(MachineProperty.GUESTFWD.name(), machine.getGuestFwd());
-        stateValues.put(MachineProperty.UI.name(), machine.getEnableVNC() == 1 ? "VNC" : "SDL");
+        // Store the actual backend ("VNC" / "SDL" / "GTK"). Reading the raw
+        // ui string back is the only way GTK survives a reload: deriving it
+        // from the boolean enableVNC flag would always collapse to SDL.
+        stateValues.put(MachineProperty.UI.name(), machine.getUI());
         stateValues.put(MachineProperty.MOUSE.name(), machine.getMouse());
         stateValues.put(MachineProperty.KEYBOARD.name(), machine.getKeyboard());
         stateValues.put(MachineProperty.ENABLE_MTTCG.name(), machine.getEnableMTTCG());
@@ -331,7 +334,10 @@ public class MachineOpenHelper extends SQLiteOpenHelper implements IMachineDatab
             myMachine.setExtraParams(cur.getString(31));
             myMachine.setHostFwd(cur.getString(32));
             myMachine.setGuestFwd(cur.getString(33));
-            myMachine.setEnableVNC(cur.getString(34).equals("VNC") ? 1 : 0);
+            // setUI() restores the exact backend and keeps the legacy
+            // enableVNC flag in sync, so GTK rows reload as GTK while older
+            // VNC/SDL rows (and rows with a NULL column) behave as before.
+            myMachine.setUI(Config.normalizeUI(cur.getString(34)));
             myMachine.setDisableTSC(cur.getInt(35));
             myMachine.setMouse(cur.getString(36));
             myMachine.setKeyboard(cur.getString(37));
@@ -431,7 +437,16 @@ public class MachineOpenHelper extends SQLiteOpenHelper implements IMachineDatab
         Object value = params[1];
         switch(property) {
             case UI:
-                updateMachineField((Machine) observable, property, ((int) params[1]) == 1?"VNC":"SDL");
+                // The UI column now carries the backend name ("VNC"/"SDL"/"GTK"),
+                // not the old 0/1 enableVNC flag. Reading it as an int throws
+                // ClassCastException on every save, and Dispatcher swallows that
+                // exception, so the column silently stopped being written and a
+                // VNC/SDL switch was lost on restart. Accept both encodings so
+                // any caller still publishing an Integer keeps working.
+                updateMachineField((Machine) observable, property,
+                        value instanceof Integer
+                                ? (((Integer) value) == 1 ? Config.UI_VNC : Config.UI_SDL)
+                                : (String) value);
                 return;
             case OTHER:
                 return;
