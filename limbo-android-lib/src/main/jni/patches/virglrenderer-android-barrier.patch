@@ -31,3 +31,21 @@ diff --git a/src/mesa/util/u_thread.h b/src/mesa/util/u_thread.h
  
  typedef pthread_barrier_t util_barrier;
  
+
+--- a/src/virgl_util.c	2026-11-01 08:45:01.923557899 +0800
++++ b/src/virgl_util.c	2026-11-01 10:01:40.927556144 +0800
+@@ -366,7 +366,13 @@
+ 
+ void set_dmabuf_name(int fd, const char *name)
+ {
+-   #ifdef DMA_BUF_SET_NAME_B
++   /* Android's <linux/dma-buf.h> defines DMA_BUF_SET_NAME_B as
++    * _IOW(DMA_BUF_BASE, 1, u64), where u64 is a Linux kernel type that the
++    * NDK userspace headers never declare, so the ioctl below fails to compile:
++    *   error: use of undeclared identifier 'u64'
++    * The only callers are the amdgpu DRM renderers, which are compiled out on
++    * Android anyway (no libdrm), so the whole body is dropped there. */
++   #if defined(DMA_BUF_SET_NAME_B) && !defined(__ANDROID__)
+    if (name && *name != '\0')
+       ioctl(fd, DMA_BUF_SET_NAME_B, name);
+    #else
