@@ -30,10 +30,10 @@ b48ae10e  LimboExperimentalActivity.java   ← 已修 P1（上轮是 9d5d1bb4）
 | P6 停止路径 | 🟠 **设计正确但与 START_VM 存在真实抢跑窗口**，且 `singleTask` 使停止链路可能走不到 |
 | P7 mUI 守卫 | ✅ **防住改写且不误伤 VNC↔SDL**，但有一处未覆盖的变体 |
 | 原生补丁 | ✅ **5 个补丁全部干净应用**；barrier 补丁**只改 barrier guard，未误伤另一处** |
-| CI 构建 | 🔴 **4 轮全失败**；本轮失败点是 **GTK4 的 glib >= 2.84 依赖**（不是 virgl） |
+| CI 构建 | 🔴 **截至 `bc368b5` 仍无一轮成功**；失败点已推进到 GTK subproject（见 §8） |
 | APK / dex 内容 | ⚠️ **无法验证**（无 artifact、本地 APK 全是功能分支之前的） |
 
-**总体判定：Java/资源侧 P1~P5 已实质修复，静态质量明显提升；原生侧 virgl 已跨过 barrier 与 dma-buf 两道坎并成功产出 `libvirglrenderer.so`，现在卡在 GTK4 的 glib 版本依赖。验收标准 1（新 UI）具备进入构建验证的条件；验收标准 2/3（GTK/GPU 实机）仍不可达。**
+**总体判定：Java/资源侧 P1~P5 已实质修复，静态质量明显提升；原生侧已跨过 barrier → dma-buf → glib 版本 → glib 工具 PATH 四道坎。截至本报告采样时，`libepoxy.so`、`libvirglrenderer.so`、`GLib 2.89.3` 均已实际编译产出，但仍未有任何一轮 CI 走到「Verify GTK4 / GPU artifacts」及 APK 步骤。验收标准 1（新 UI）具备进入构建验证的条件；验收标准 2/3（GTK/GPU 实机）仍不可达。**
 
 ---
 
@@ -507,7 +507,44 @@ $ unzip -l /tmp/apk2/Limbo.apk | grep -E "libgtk-4|libepoxy|libvirglrenderer"
 
 ---
 
-## 8. 未验证项与风险（诚实边界）
+## 8. 补充观察：验证期间上游仍在快速推进（重要）
+
+本报告写作期间，HEAD 从 `cc9b52e` → `b2dd2c8` → `2181ab7` → `bc368b5` 连续前进，每一轮都恰好修掉我上一轮定位的失败点。**这说明结论对快照敏感，请以 SHA 为准**：
+
+| 快照 | 失败点 | 我的定位 | 后续是否修复 |
+|---|---|---|---|
+| `7a14501` | `u_thread.h:287` pthread_barrier_t | §5.4 barrier 补丁 | ✅ `cc9b52e` 修 |
+| `cc9b52e` | `virgl_util.c:371` u64 | 已由 `b2dd2c8` 预修 | ✅ |
+| `b2dd2c8` | GTK4: glib >= 2.84 不满足 + `glib/hack.patch` 缺失 | §6.5 C-1 | ✅ `2181ab7` 引入 glib 2.89.3 |
+| `2181ab7` | **gdk-pixbuf**: `Program glib-compile-resources found: NO` → 回退 glib wrap → 仍撞 `hack.patch` 缺失 | 本轮新定位（见下） | ✅ `bc368b5` 把 glib289/bin 加入 PATH |
+| `bc368b5` | 验证时仍在 `Build native libraries`（in_progress） | — | ⏳ 未完成 |
+
+### 8.1 本轮新定位的失败点（`2181ab7`，run 41265057294）
+
+`libvirglrenderer.so`、`libepoxy.so`、`GLib 2.89.3` **全部已成功产出**（`glib-compile-resources` 已安装到 `glib289/install-android/bin`，见日志 line 5628）。失败转移到 gdk-pixbuf 的**程序查找**：
+
+```
+7584: gdk-pixbuf| Program glib-compile-resources found: NO
+7585: gdk-pixbuf| Fallback to subproject glib which provides program glib-compile-resources
+20830: Program glib-compile-resources found: NO
+20831: Fallback to subproject glib which provides program glib-compile-resources
+20832: Applying diff file "glib/hack.patch"
+20833: ERROR: Subproject glib is buildable: NO
+20835: subprojects/gdk-pixbuf/meson.build:416:25: ERROR: Diff file ".../packagefiles/glib/hack.patch" does not exist
+```
+
+**机制**：`pkg-config` 只发布库和头文件，meson 找 `glib-compile-resources`（一个**构建期工具**）是走 `PATH` 的。`glib289` 前缀只被放进了 `PKG_CONFIG_PATH`，**没有**进 `PATH`，于是程序找不到 → meson 回退到 glib wrap → wrap 声明 `diff_files=glib/hack.patch`，该文件在 gtk4android 仓库不存在 → 直接 ERROR。
+
+这条与 §6.5 的 C-1 是**同源不同层**的两个缺陷：C-1 是「库版本不够」，本条是「构建期程序找不到」。修复（`bc368b5`，`scripts/build_gtk4android.sh:114-122`）补上了 `export PATH="$GLIB289_BIN:$PATH"` 并加了存在性校验，方向正确。
+
+### 8.2 顺带核实的 pixman 情况（与我先前的担心相关）
+
+日志里确实出现 `cairo| Run-time dependency pixman-1 found: NO`（line 7320），但随后 `cairo| Dependency pixman-1 for host machine found: YES 0.43.4 (overridden)`（line 7375）—— 即 cairo 走了 `pixman.wrap` 子项目回退并**成功**。所以 `PC_DIRS` 移除 `$JNI/pc` 后 pixman 并未真的丢失（wrap 兜住了）。
+**但这仍是一个可以更干净的点**：`scripts/gen_pc_files.sh:101-111` 本来就产出 `pixman-1.pc` 到 `$JNI/pc`，把 `$JNI/pc` 留在 `PC_DIRS` 里可以避免一次多余的下游源码构建（`pixman.wrap` 会拉 0.43.4 源码编译）。属优化项，不是缺陷——**我此前怀疑「pixman 会构建失败」的判断经日志核对是不成立的，这里更正**。
+
+---
+
+## 9. 未验证项与风险（诚实边界）
 
 1. **未做真实编译**。`javac 17` 可用，但本机**没有** `android.jar`、androidx、material、recyclerview 的任何 jar（`find / -name android.jar` 无结果），没有 `aapt2`/`d8`。`javalang` 只验语法不验语义。因此：类型错误、`R.*` 资源 ID 的存在性、`@style/@attr` 是否被 material 1.1.0 提供、方法签名不匹配等，**全未验证**。
 2. **`javalang` 的局限**：它对 Java 8 之后语法也接受，所以「83/83 通过」只证明括号/结构合法，**不能**替代「Java 8 语言级别合规」。Java 8 违规我另用 regex 扫描（`var`/`->`/`record`/`"""`/匿名类钻石）仍为 0，但 regex 本身不是完备的语法分析。
@@ -521,7 +558,7 @@ $ unzip -l /tmp/apk2/Limbo.apk | grep -E "libgtk-4|libepoxy|libvirglrenderer"
 
 ---
 
-## 9. 建议 Lead 的处理顺序
+## 10. 建议 Lead 的处理顺序
 
 1. **C-1（GTK4 glib）** —— 唯一阻断 GTK 的构建问题。两条都要做：把 glib 提到 ≥2.84 交给 gtk4android（或设 `-Dglib=...` 指向新前缀），并补齐 `subprojects/packagefiles/glib/hack.patch`；顺手把 `glib.wrap` 的 `revision=main` 钉成 tag（C-3）。
 2. **P6-a（停止标志改到 `onResume` 或补 `onNewIntent`）** —— 一行级别的结构性修正，但对「后台 GTK 窗口能否从首页停止」影响很大。

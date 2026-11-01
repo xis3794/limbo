@@ -114,6 +114,13 @@ jobs:
           # glib 2.56 (QEMU 5.1/8.0.5) runs autogen.sh which needs gtkdocize
           sudo apt-get update -qq
           sudo apt-get install -y -qq gtk-doc-tools gettext libtool-bin
+          # GTK's build runs GLib helper programs (glib-compile-resources and
+          # friends) on the build machine - they must be host binaries, not the
+          # aarch64 ones cross-compiled for the target (that gives
+          # "Exec format error"). gtk4android is configured with a native_file
+          # that points at the host pkg-config, so these have to exist here.
+          sudo apt-get install -y -qq libglib2.0-dev-bin
+          command -v glib-compile-resources && glib-compile-resources --version || true
           command -v gtkdocize && echo "gtkdocize OK"
           command -v msgfmt && echo "msgfmt OK"
           echo "tool check done"

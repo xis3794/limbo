@@ -61,6 +61,21 @@ fi
 
 mkdir -p "$OBJ" "$INSTALL"
 
+cat > "$JNI/gtk4-native.txt" <<EOF
+[binaries]
+c = '/usr/bin/cc'
+cpp = '/usr/bin/c++'
+ar = '/usr/bin/ar'
+strip = '/usr/bin/strip'
+pkgconfig = '/usr/bin/pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'
+EOF
+
 cat > "$JNI/gtk4-cross.txt" <<EOF
 [binaries]
 c = '$CLANG_BIN/aarch64-linux-android$GTK_ANDROID_API-clang'
@@ -109,21 +124,24 @@ PC_DIRS="$GLIB289_PC:$JNI/libepoxy/install/lib/pkgconfig"
 export PKG_CONFIG_PATH="$PC_DIRS"
 export PKG_CONFIG_LIBDIR="$PC_DIRS"
 
-# gdk-pixbuf (a GTK subproject) needs the glib-compile-resources *program*.
-# pkg-config only publishes libraries and headers, so the tool is found through
-# PATH; without it meson tries the glib wrap as a program provider and dies on
-# the missing subprojects/packagefiles/glib/hack.patch. Put the 2.89 prefix
-# first so its glib tools win over anything the runner has installed.
-GLIB289_BIN="$JNI/glib289/install-android/bin"
-if [ ! -x "$GLIB289_BIN/glib-compile-resources" ]; then
-  echo "ERROR: $GLIB289_BIN/glib-compile-resources missing (GTK subprojects need it)" >&2
+# GTK's build needs GLib *helper programs* (glib-compile-resources,
+# glib-mkenums, glib-genmarshal). They run on the BUILD machine, so they have to
+# be host binaries. Putting the 2.89 prefix on PATH supplied the Android
+# aarch64 builds instead and resource compilation died with
+#     /bin/sh: 1: .../glib-compile-resources: Exec format error
+# A native_file (further down) makes meson resolve build-machine programs
+# against the host's own pkg-config, while everything the target links still
+# comes from the 2.89 prefix.
+if ! command -v glib-compile-resources >/dev/null 2>&1; then
+  echo "ERROR: host glib-compile-resources missing (apt-get install libglib2.0-dev-bin)" >&2
   exit 1
 fi
-export PATH="$GLIB289_BIN:$PATH"
+echo ">> host glib-compile-resources: $(command -v glib-compile-resources)"
 
 cd "$SRC"
 meson setup "$BUILD" . \
   --cross-file "$JNI/gtk4-cross.txt" \
+  --native-file "$JNI/gtk4-native.txt" \
   --prefix "$INSTALL" \
   --default-library=shared \
   --wrap-mode=default \
