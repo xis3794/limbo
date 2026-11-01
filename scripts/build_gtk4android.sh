@@ -61,13 +61,30 @@ fi
 
 mkdir -p "$OBJ" "$INSTALL"
 
+# meson resolves a dependency's helper programs (glib_compile_resources,
+# glib_mkenums, ...) from the pkg-config variables of that dependency. The
+# build-machine gio-2.0 lookup was still answering with the 2.89 prefix because
+# PKG_CONFIG_PATH below is process-wide, so meson took the aarch64 tool paths
+# straight out of the target .pc file. A wrapper for the native file hides our
+# prefixes from build-machine lookups without touching the cross build.
+cat > "$JNI/host-pkg-config.sh" <<'WRAPPER'
+#!/bin/sh
+# Only the build machine's own pkg-config entries; the Limbo prefixes are
+# deliberately absent so build-machine dependencies resolve to host packages.
+PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
+PKG_CONFIG_LIBDIR=
+export PKG_CONFIG_PATH PKG_CONFIG_LIBDIR
+exec /usr/bin/pkg-config "$@"
+WRAPPER
+chmod +x "$JNI/host-pkg-config.sh"
+
 cat > "$JNI/gtk4-native.txt" <<EOF
 [binaries]
 c = '/usr/bin/cc'
 cpp = '/usr/bin/c++'
 ar = '/usr/bin/ar'
 strip = '/usr/bin/strip'
-pkgconfig = '/usr/bin/pkg-config'
+pkgconfig = '$JNI/host-pkg-config.sh'
 
 [host_machine]
 system = 'linux'
