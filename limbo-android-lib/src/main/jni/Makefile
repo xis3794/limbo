@@ -172,7 +172,7 @@ endif
 
 export
 
-.PHONY: limbo clean distclean clean-ndk createdirs clean-ffi clean-glib clean-qemu clean-pixman config-libslirp libslirp
+.PHONY: limbo clean distclean clean-ndk createdirs clean-ffi clean-glib clean-glib289 clean-qemu clean-pixman config-libslirp libslirp glib289 config-glib289 clean-gtk gtk clean-virgl virgl clean-epoxy epoxy
 
 default: limbo
 	
@@ -338,7 +338,23 @@ clean-epoxy:
 	-rm -rf "$(LIMBO_JNI_ROOT)/libepoxy/build" "$(EPOXY_INSTALL_DIR)"
 	-rm -f "$(LIMBO_JNI_ROOT)/epoxy-cross.txt"
 
-config-gtk: ndk epoxy
+# GTK 4.19+ requires GLib >= 2.84, but QEMU is built against 2.76.6 and that
+# ABI must not move. Building 2.89.3 into its own prefix lets meson resolve
+# GTK's glib-2.0 dependency through pkg-config while QEMU keeps its GLib.
+# See scripts/build_glib289.sh for why the two copies never meet in one link.
+config-glib289: ndk
+	@if [ ! -f "$(LIMBO_JNI_ROOT)/glib289/meson.build" ]; then \
+		echo "ERROR: glib 2.89.3 sources missing (CI fetches them into glib289)"; exit 1; \
+	fi
+
+glib289: ndk
+	bash $(LIMBO_PRJ_ROOT)/scripts/build_glib289.sh $(LIMBO_JNI_ROOT) $(NDK_ROOT) $(APP_ABI)
+
+clean-glib289:
+	-rm -rf "$(LIMBO_JNI_ROOT)/glib289/build-android" "$(LIMBO_JNI_ROOT)/glib289/install-android"
+	-rm -f "$(LIMBO_JNI_ROOT)/glib289-cross.txt"
+
+config-gtk: ndk epoxy glib289
 	@if [ "$(APP_ABI)" != "arm64-v8a" ]; then \
 		echo "ERROR: the GDK android backend only builds for arm64-v8a (got $(APP_ABI))"; \
 		exit 1; \
@@ -398,6 +414,9 @@ config-deps: ndk config-ffi config-glib config-pixman
 	fi
 
 deps: ndk ffi glib pixman
+	# GTK resolves its glib-2.0 through pkg-config against the 2.89 prefix, so
+	# it has to be built before gtk; QEMU's own glib stays 2.76.6.
+	@if [ "$(USE_GTK)" = "true" ]; then $(MAKE) glib289; fi
 	@if [ "$(USE_VIRGL)" = "true" ]; then $(MAKE) virgl; fi
 	@if [ "$(USE_GTK)" = "true" ]; then $(MAKE) gtk; fi
 

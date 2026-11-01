@@ -207,6 +207,13 @@ jobs:
             git clone --depth 1 --branch master --single-branch \
               https://github.com/SlugAir928437/gtk4android.git gtk4android
             echo ">> gtk4android: $(git -C gtk4android rev-parse --short HEAD)"
+
+            # GTK requires GLib >= 2.84 while QEMU links Limbo's 2.76.6, so the
+            # GTK stack gets its own 2.89.3 build (see scripts/build_glib289.sh).
+            # A tag, not the moving GMain default branch.
+            git clone --depth 1 --branch 2.89.3 --single-branch \
+              https://gitlab.gnome.org/GNOME/glib.git glib289
+            echo ">> glib (GTK stack): $(git -C glib289 describe --tags --always)"
           fi
 
           echo ">> libepoxy/libvirglrenderer sources ready"

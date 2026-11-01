@@ -90,11 +90,22 @@ if [ -d "$SAVE" ]; then
   mkdir -p "$BUILD"; cp -a "$SAVE" "$BUILD/subprojects"; rm -rf "$SAVE"
 fi
 
-# glib/libffi/pixman/epoxy come from the jni builds, not from the wraps: they
-# are the very same libraries QEMU links against, so GTK must share them or
-# the process ends up with two GLibs.  Restricting PKG_CONFIG_LIBDIR to those
-# prefixes also keeps the runner's host pcre2/zlib/gtk out of the build.
-PC_DIRS="$JNI/pc:$JNI/libepoxy/install/lib/pkgconfig"
+# GTK needs GLib >= 2.84 (glib_req in its meson.build) while QEMU is built
+# against Limbo's 2.76.6, so the GTK stack gets its own 2.89.3 prefix built by
+# scripts/build_glib289.sh. libffi and pixman stay the QEMU ones - they are
+# ABI-stable and GLib 2.89 is built against them as well. libepoxy is our
+# standalone EGL-only build, not the wrap, so GPU acceleration does not
+# depend on GTK compiling.
+#
+# Restricting PKG_CONFIG_LIBDIR to those prefixes also keeps the runner's
+# host pcre2/zlib/gtk out of the build.
+GLIB289_PC="$JNI/glib289/install-android/lib/pkgconfig"
+if [ ! -d "$GLIB289_PC" ]; then
+  echo "ERROR: GTK needs GLib >= 2.84, but $GLIB289_PC is missing." >&2
+  echo "       The Makefile builds it first (config-glib289 / glib289)." >&2
+  exit 1
+fi
+PC_DIRS="$GLIB289_PC:$JNI/libepoxy/install/lib/pkgconfig"
 export PKG_CONFIG_PATH="$PC_DIRS"
 export PKG_CONFIG_LIBDIR="$PC_DIRS"
 
