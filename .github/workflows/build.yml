@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       qemu_version:
-        description: 'QEMU version to build'
+        description: 'QEMU version to build (GTK4/GPU are built against 11.0.0 only)'
         required: true
-        default: '11.1.2'
+        default: '11.0.0'
         type: choice
         options:
           - '5.1.0'
@@ -49,7 +49,7 @@ jobs:
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      QEMU_VER: ${{ github.event.inputs.qemu_version || '11.1.2' }}
+      QEMU_VER: ${{ github.event.inputs.qemu_version || '11.0.0' }}
       BUILD_HOST: ${{ github.event.inputs.build_host || 'arm64-v8a' }}
       BUILD_GUEST: ${{ github.event.inputs.build_guest || 'x86_64-softmmu' }}
       # Boolean inputs arrive as the strings 'true'/'false'. Normalising them
