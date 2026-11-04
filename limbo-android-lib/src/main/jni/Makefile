@@ -447,6 +447,13 @@ _build-qemu: ndk
 				libgdk-4.so.1=libgdk-4.so \
 				libgsk-4.so.1=libgsk-4.so \
 				libvirglrenderer.so.1=libvirglrenderer.so \
+				libglib-2.0.so.0=libglib-2.0.so \
+				libgmodule-2.0.so.0=libgmodule-2.0.so \
+				libgobject-2.0.so.0=libgobject-2.0.so \
+				libgio-2.0.so.0=libgio-2.0.so \
+				libintl.so.8=libintl.so \
+				libffi.so.7=libffi.so \
+				libffi.so.8=libffi.so \
 				2>/dev/null || true; \
 		done; \
 		echo "[OK] DT_NEEDED rewritten to unversioned GTK/GL library names"; \

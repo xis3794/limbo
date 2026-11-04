@@ -159,7 +159,9 @@ ninja -C "$BUILD" install
 # (the 2.76 build linked both into libglib-2.0.so, which is why nothing had to
 # be copied before), so all four have to be staged in obj/local or the engine
 # fails to load with no GTK/SDL/VNC screen at all.
-GLIB_SOS="libglib-2.0 libgmodule-2.0 libgobject-2.0 libgio-2.0"
+# libgobject-2.0.so links the shared libffi we built above, and the loader
+# needs that file in the same flat directory, so it is staged with the rest.
+GLIB_SOS="libglib-2.0 libgmodule-2.0 libgobject-2.0 libgio-2.0 libffi"
 for base in $GLIB_SOS; do
   src=""
   for cand in "$INSTALL/lib/$base.so" "$INSTALL/lib/$base.so."*; do
