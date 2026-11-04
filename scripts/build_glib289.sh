@@ -153,18 +153,44 @@ meson setup "$BUILD" . \
 ninja -C "$BUILD" -j "$(nproc)"
 ninja -C "$BUILD" install
 
-# QEMU's Android loader resolves DT_NEEDED by exact filename, so drop the
-# version suffix the same way build_glib276.sh does for its GLib.
-for f in "$INSTALL"/lib/libglib-2.0.so* "$INSTALL"/lib/libgmodule-2.0.so* \
-         "$INSTALL"/lib/libgobject-2.0.so* "$INSTALL"/lib/libgio-2.0.so*; do
-  [ -e "$f" ] || continue
-  base=$(basename "$f")
-  case "$base" in
-    *.so.*)
-      # keep the shared-library chain because GTK links them by version
-      ;;
-  esac
+# QEMU dlopens libqemu-system-*.so from the APK's lib dir, and Android's
+# linker resolves every DT_NEEDED entry against that flat directory by exact
+# file name. GLib 2.89 builds gobject and gio as separate shared libraries
+# (the 2.76 build linked both into libglib-2.0.so, which is why nothing had to
+# be copied before), so all four have to be staged in obj/local or the engine
+# fails to load with no GTK/SDL/VNC screen at all.
+GLIB_SOS="libglib-2.0 libgmodule-2.0 libgobject-2.0 libgio-2.0"
+for base in $GLIB_SOS; do
+  src=""
+  for cand in "$INSTALL/lib/$base.so" "$INSTALL/lib/$base.so."*; do
+    [ -f "$cand" ] || continue
+    # prefer the real ELF over the linker script / bare symlink
+    head -c4 "$cand" 2>/dev/null | grep -q ELF && { src=$cand; break; }
+  done
+  if [ -z "$src" ]; then
+    echo "ERROR: $base.so missing from $INSTALL/lib" >&2
+    exit 1
+  fi
+  cp -f "$src" "$OBJ/$base.so"
+  echo ">> $base.so -> obj/local ($(stat -c%s "$OBJ/$base.so") bytes)"
 done
+
+# Rewrite the versioned DT_NEEDED spellings in place (fix_needed.py overwrites
+# the strings without relocating .dynstr, which the Huawei linker requires).
+# Missing a rewrite means "library not found" at load time, i.e. no display.
+NEEDED_MAP="libglib-2.0.so.0=libglib-2.0.so libgmodule-2.0.so.0=libgmodule-2.0.so libgobject-2.0.so.0=libgobject-2.0.so libgio-2.0.so.0=libgio-2.0.so"
+for f in $GLIB_SOS; do
+  python3 "$JNI/../../../../scripts/fix_needed.py" "$OBJ/$f.so" $NEEDED_MAP || true
+done
+
+# Every other library we ship (GTK, pango, cairo, gdk-pixbuf, harfbuzz, ...)
+# carries the same versioned names, so rewrite them too; otherwise the loader
+# gets past libqemu and fails on the next dependency instead.
+for f in "$OBJ"/*.so; do
+  [ -f "$f" ] || continue
+  python3 "$JNI/../../../../scripts/fix_needed.py" "$f" $NEEDED_MAP || true
+done
+echo "[OK] GLib DT_NEEDED rewritten to unversioned names across obj/local"
 
 echo "[OK] glib $GLIB_VERSION built: $INSTALL"
 ls -la "$INSTALL"/lib/libglib-2.0.so* 2>/dev/null | head -3 || true
