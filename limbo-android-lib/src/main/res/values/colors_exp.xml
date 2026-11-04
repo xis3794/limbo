@@ -32,6 +32,11 @@
     <color name="exp_light_warning">#E65100</color>
     <!-- Translucent top bar background, shown only once the list is scrolled (spec 6.2). -->
     <color name="exp_light_top_bar_scrim">#F2FFFFFF</color>
+    <!-- Floating capsule bar container (spec 6.3). It sits on the page background,
+         which is #FFFFFF in light mode / #242424 in dark mode, so a 95% container
+         renders identically to Miuix's solid surfaceContainer while still letting
+         the page breathe through at the edges. -->
+    <color name="exp_light_bottom_bar">#F2FFFFFF</color>
 
     <!-- ===================== dark (Miuix darkColorScheme) ===================== -->
     <color name="exp_dark_primary">#277AF7</color>
@@ -53,6 +58,7 @@
     <color name="exp_dark_error">#F12522</color>
     <color name="exp_dark_warning">#E65100</color>
     <color name="exp_dark_top_bar_scrim">#F2242424</color>
+    <color name="exp_dark_bottom_bar">#F2242424</color>
 
     <!-- ============ machine icon tiles (spec 6.4: soft colours, white glyph) ============ -->
     <color name="exp_tile_1">#5B8DEF</color>

@@ -81,6 +81,8 @@ public final class ExpTheme {
     public final int error;
     public final int warning;
     public final int topBarScrim;
+    /** Floating capsule bar container colour (`#F2FFFFFF` / `#F2242424`, spec 6.3). */
+    public final int bottomBar;
 
     // ---- type ----
     /** Miuix {@code title1} (32sp) — the collapsing large title. */
@@ -123,6 +125,7 @@ public final class ExpTheme {
             error = res.getColor(R.color.exp_dark_error);
             warning = res.getColor(R.color.exp_dark_warning);
             topBarScrim = res.getColor(R.color.exp_dark_top_bar_scrim);
+            bottomBar = res.getColor(R.color.exp_dark_bottom_bar);
         } else {
             primary = res.getColor(R.color.exp_light_primary);
             onPrimary = res.getColor(R.color.exp_light_on_primary);
@@ -145,6 +148,7 @@ public final class ExpTheme {
             error = res.getColor(R.color.exp_light_error);
             warning = res.getColor(R.color.exp_light_warning);
             topBarScrim = res.getColor(R.color.exp_light_top_bar_scrim);
+            bottomBar = res.getColor(R.color.exp_light_bottom_bar);
         }
 
         // Miuix TopAppBar renders the large title with the default weight and the

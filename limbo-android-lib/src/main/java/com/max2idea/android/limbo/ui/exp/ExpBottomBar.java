@@ -29,8 +29,10 @@ import com.limbo.emu.lib.R;
  *       SemiBold when selected, Normal otherwise</li>
  * </ul>
  *
- * <p>The bar sits horizontally centred with 12dp + navigation-bar inset above the
- * window bottom (MainScreen.kt: {@code padding(bottom = 12.dp + navBarsBottomPadding)}).
+ * <p>The bar sits horizontally centred 12dp above the window bottom. NPatch uses
+ * {@code padding(bottom = 12.dp + navBarsBottomPadding)}; this activity is not
+ * edge-to-edge at the bottom (only LAYOUT_FULLSCREEN for the status bar is set),
+ * so the content already stops above the navigation bar and the inset is zero.
  *
  * <p>This screen has two action items rather than navigation tabs, so there is no
  * persistent selection: the indicator only lights up while the item is pressed.
@@ -47,8 +49,7 @@ final class ExpBottomBar extends FrameLayout {
     /** primary.copy(alpha = 0.15f) — the selected-tab plate. */
     private static final float INDICATOR_ALPHA = 0.15f;
 
-    ExpBottomBar(Context context, final ExpTheme theme, final Listener listener,
-                 int navigationBarHeight) {
+    ExpBottomBar(Context context, final ExpTheme theme, final Listener listener) {
         super(context);
 
         int barHeight = theme.dp(ExpTheme.BOTTOM_BAR_HEIGHT_DP);
@@ -57,14 +58,12 @@ final class ExpBottomBar extends FrameLayout {
         LinearLayout bar = new LinearLayout(context);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        // Container colour is surfaceContainer; the light theme adds a hairline outline.
-        // CircleShape: corner radius = half of the container height (32dp of 64dp).
-        bar.setBackground(ExpDrawables.roundedRect(theme.surfaceContainer,
+        // Spec 6.3: #F2FFFFFF / #F2242424 container, CircleShape (= half height radius).
+        bar.setBackground(ExpDrawables.roundedRect(theme.bottomBar,
                 barHeight / 2f, theme.dark ? 0 : theme.outline, theme.dp(1)));
         bar.setPadding(padding, padding, padding, padding);
-        if (ExpDrawables.hasElevation()) {
-            bar.setElevation(theme.dpf(8f));
-        }
+        // API 21+ (our minSdk) supports elevation; the spec asks for an 8dp lift.
+        bar.setElevation(theme.dpf(8f));
 
         View newTab = buildTab(context, theme, R.drawable.ic_plus, R.string.exp_add,
                 new OnClickListener() {
@@ -94,14 +93,14 @@ final class ExpBottomBar extends FrameLayout {
         LayoutParams barParams = new LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, barHeight);
         barParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        barParams.bottomMargin = theme.dp(ExpTheme.BOTTOM_BAR_MARGIN_DP) + navigationBarHeight;
+        barParams.bottomMargin = theme.dp(ExpTheme.BOTTOM_BAR_MARGIN_DP);
         addView(bar, barParams);
     }
 
     /** Total height the bar occupies at the bottom of the content area. */
-    static int occupiedHeight(ExpTheme theme, int navigationBarHeight) {
+    static int occupiedHeight(ExpTheme theme) {
         return theme.dp(ExpTheme.BOTTOM_BAR_HEIGHT_DP)
-                + theme.dp(ExpTheme.BOTTOM_BAR_MARGIN_DP) + navigationBarHeight;
+                + theme.dp(ExpTheme.BOTTOM_BAR_MARGIN_DP);
     }
 
     private static View buildTab(Context context, final ExpTheme theme, int iconRes, int labelRes,
@@ -131,7 +130,7 @@ final class ExpBottomBar extends FrameLayout {
                 Gravity.CENTER);
         content.setLayoutParams(contentParams);
 
-        ImageView icon = new ImageView(context);
+        final ImageView icon = new ImageView(context);
         int iconSize = theme.dp(24);
         icon.setLayoutParams(new LinearLayout.LayoutParams(iconSize, iconSize));
         icon.setImageResource(iconRes);
@@ -142,7 +141,7 @@ final class ExpBottomBar extends FrameLayout {
         gap.setLayoutParams(new LinearLayout.LayoutParams(1, theme.dp(1)));
         content.addView(gap);
 
-        TextView label = new TextView(context);
+        final TextView label = new TextView(context);
         label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
         label.setTypeface(theme.medium);
         label.setTextColor(theme.onSurfaceVariantSummary);
@@ -152,20 +151,29 @@ final class ExpBottomBar extends FrameLayout {
         content.addView(label);
         tab.addView(content);
 
+        // Pressed == the "selected" look from the spec: primary@15% plate plus
+        // primary content. This screen has no persistent tab selection, so the
+        // highlight only lives for the duration of the touch.
         tab.setOnTouchListener(new OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
+                boolean pressed;
                 switch (event.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
-                        indicator.setAlpha(1f);
+                        pressed = true;
                         break;
                     case MotionEvent.ACTION_CANCEL:
                     case MotionEvent.ACTION_UP:
-                        indicator.setAlpha(0f);
+                        pressed = false;
                         break;
                     default:
-                        break;
+                        // Keep the current state for MOVE etc.
+                        return false;
                 }
+                indicator.setAlpha(pressed ? 1f : 0f);
+                int contentColor = pressed ? theme.primary : theme.onSurfaceVariantSummary;
+                icon.setColorFilter(contentColor, PorterDuff.Mode.SRC_IN);
+                label.setTextColor(contentColor);
                 return false;
             }
         });

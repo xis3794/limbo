@@ -51,7 +51,8 @@ import java.util.ArrayList;
  * </pre>
  *
  * <p>Every view is built in code from plain {@link View}s: no XML layout, no
- * Kotlin, no Compose, no new dependency, and only API 21..29 symbols.
+ * Kotlin / declarative UI framework, no new dependency, and only API 21..29
+ * symbols.
  */
 public class LimboExperimentalActivity extends AppCompatActivity
         implements ExpMachineListAdapter.Listener, ExpBottomBar.Listener,
@@ -84,7 +85,6 @@ public class LimboExperimentalActivity extends AppCompatActivity
     private ExpMachineListAdapter adapter;
 
     private int statusBarHeight;
-    private int navigationBarHeight;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,7 +96,6 @@ public class LimboExperimentalActivity extends AppCompatActivity
         setupWindow();
 
         statusBarHeight = readStatusBarHeight();
-        navigationBarHeight = readNavigationBarHeight();
 
         setContentView(buildContentView());
         machineController.addOnStatusChangeListener(this);
@@ -130,21 +129,24 @@ public class LimboExperimentalActivity extends AppCompatActivity
         Window window = getWindow();
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            window.setStatusBarColor(Color.TRANSPARENT);
-            window.setNavigationBarColor(theme.background);
-        }
+        // Both setters exist from API 21 on, which is this module's minSdk.
+        window.setStatusBarColor(Color.TRANSPARENT);
+        window.setNavigationBarColor(theme.background);
         View decor = window.getDecorView();
         int flags = decor.getSystemUiVisibility();
         flags |= View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
-        if (!theme.dark) {
-            flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        // Dark system-bar glyphs are API 23 (status bar) / API 26 (navigation bar).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!theme.dark) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            } else {
+                flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
             }
-        } else {
-            flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!theme.dark) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            } else {
                 flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
             }
         }
@@ -164,16 +166,6 @@ public class LimboExperimentalActivity extends AppCompatActivity
             }
         }
         return theme.dp(24f);
-    }
-
-    /**
-     * The window does not extend under the navigation bar (only the status bar
-     * is laid out edge to edge), so the capsule bar only needs its own 12dp
-     * margin, exactly like NPatch's {@code 12.dp + navBarsBottomPadding} on a
-     * non-edge-to-edge activity.
-     */
-    private int readNavigationBarHeight() {
-        return 0;
     }
 
     // ---------------------------------------------------------------- layout
@@ -199,7 +191,7 @@ public class LimboExperimentalActivity extends AppCompatActivity
         });
         root.addView(topBar);
 
-        ExpBottomBar bottomBar = new ExpBottomBar(this, theme, this, navigationBarHeight);
+        ExpBottomBar bottomBar = new ExpBottomBar(this, theme, this);
         root.addView(bottomBar);
 
         list.addOnScrollListener(new RecyclerView.OnScrollListener() {
@@ -227,10 +219,7 @@ public class LimboExperimentalActivity extends AppCompatActivity
             return;
         }
         int top = topBar.getExpandedHeight() + theme.dp(CONTENT_TOP_EXTRA_DP);
-        int bottom = theme.dp(ExpTheme.BOTTOM_BAR_HEIGHT_DP)
-                + theme.dp(ExpTheme.BOTTOM_BAR_MARGIN_DP)
-                + navigationBarHeight
-                + theme.dp(CONTENT_BOTTOM_EXTRA_DP);
+        int bottom = ExpBottomBar.occupiedHeight(theme) + theme.dp(CONTENT_BOTTOM_EXTRA_DP);
         list.setPadding(0, top, 0, bottom);
     }
 
@@ -243,7 +232,12 @@ public class LimboExperimentalActivity extends AppCompatActivity
         }
 
         boolean running = machineController.isRunning();
-        String runningName = running ? machineController.getMachineName() : null;
+        String runningName = running ? safeRunningName() : null;
+        if (running && TextUtils.isEmpty(runningName)) {
+            // The service reports Running but no machine is loaded yet; treat the
+            // state as "not running" so the card does not claim an unnamed VM.
+            running = false;
+        }
 
         ArrayList<ExpMachineListAdapter.Entry> entries =
                 new ArrayList<ExpMachineListAdapter.Entry>(names.size());
@@ -271,25 +265,40 @@ public class LimboExperimentalActivity extends AppCompatActivity
         String statusTitle = null;
         String statusMeta = null;
         if (running) {
-            Machine runningMachine = machineController.getMachine();
-            if (runningMachine == null && runningName != null) {
-                runningMachine = machineController.getMachineConfig(runningName);
-            }
+            Machine runningMachine = machineController.getMachineConfig(runningName);
             statusTitle = TextUtils.isEmpty(runningName)
                     ? getString(R.string.exp_unnamed_machine) : runningName;
+            // Spec 5: the status card summary reads "显示后端 · N 核 · N MB"
+            // (e.g. "SDL · 4 核 · 2048 MB"); the adapter prefixes the machine name.
             statusMeta = runningMachine == null
                     ? getString(R.string.exp_config_unavailable)
-                    : getString(R.string.exp_machine_meta, displayArch(runningMachine),
+                    : getString(R.string.exp_status_meta, displayBackend(runningMachine),
                     runningMachine.getCpuNum(), runningMachine.getMemory());
         }
 
         adapter.setData(entries, running, statusTitle, statusMeta);
-        updateListPadding();
+    }
+
+    /**
+     * {@link MachineController#getMachineName()} dereferences the currently loaded
+     * machine, which is null while the service is still starting up.
+     */
+    private String safeRunningName() {
+        try {
+            return machineController.getMachineName();
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     private String displayArch(Machine machine) {
         return TextUtils.isEmpty(machine.getArch())
                 ? getString(R.string.exp_unknown_arch) : machine.getArch();
+    }
+
+    /** "SDL" / "VNC" / "GTK" for the status card summary. */
+    private String displayBackend(Machine machine) {
+        return Config.normalizeUI(machine.getUI());
     }
 
     private void delayedRefresh(long delayMs) {
@@ -363,8 +372,9 @@ public class LimboExperimentalActivity extends AppCompatActivity
     @Override
     public void onMachineStatusChanged(Machine machine, MachineController.MachineStatus status,
                                        Object o) {
-        // Status callbacks can arrive from the QEMU thread.
-        runOnUiThread(new Runnable() {
+        // Status callbacks can arrive from the QEMU thread and may land while the
+        // list is computing a layout, so always post instead of refreshing inline.
+        handler.post(new Runnable() {
             @Override
             public void run() {
                 if (!isFinishing() && !isDestroyed()) {
@@ -379,7 +389,8 @@ public class LimboExperimentalActivity extends AppCompatActivity
     /** Opens the machine editor, or the VM display when {@code autostart} is set. */
     private void openMachine(String name, boolean autostart) {
         MachineController controller = MachineController.getInstance();
-        if (controller.isRunning() && !name.equals(controller.getMachineName())) {
+        String currentName = controller.isRunning() ? safeRunningName() : null;
+        if (controller.isRunning() && currentName != null && !name.equals(currentName)) {
             // A different machine owns the display already; the editor cannot open.
             Toast.makeText(this, R.string.stop_first, Toast.LENGTH_SHORT).show();
             return;
@@ -423,10 +434,14 @@ public class LimboExperimentalActivity extends AppCompatActivity
      * library manifest.
      */
     private void openRunningDisplay() {
-        Machine runningMachine = machineController.getMachine();
+        String runningName = safeRunningName();
+        Machine runningMachine = runningName == null
+                ? null : machineController.getMachineConfig(runningName);
         String ui = Config.UI_SDL;
         if (runningMachine != null) {
             ui = Config.normalizeUI(runningMachine.getUI());
+        } else if (machineController.isVNCEnabled()) {
+            ui = Config.UI_VNC;
         }
         if (Config.UI_VNC.equals(ui)) {
             startActivity(new Intent(this, VncActivity.class));
@@ -444,8 +459,8 @@ public class LimboExperimentalActivity extends AppCompatActivity
         input.setHint(R.string.exp_machine_name_hint);
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setTextColor(theme.onSurface);
-        input.setHintTextColor(theme.onSurfaceVariantSummary);
+        // The dialog takes its colours from the activity theme, so the input keeps
+        // the theme colours instead of the custom dark/light tokens.
 
         int horizontalPadding = theme.dp(20f);
         FrameLayout container = new FrameLayout(this);
@@ -482,8 +497,8 @@ public class LimboExperimentalActivity extends AppCompatActivity
     }
 
     private void confirmDelete(final String name) {
-        if (machineController.isRunning()
-                && name != null && name.equals(machineController.getMachineName())) {
+        if (machineController.isRunning() && name != null
+                && name.equals(safeRunningName())) {
             Toast.makeText(this, R.string.stop_first, Toast.LENGTH_SHORT).show();
             return;
         }

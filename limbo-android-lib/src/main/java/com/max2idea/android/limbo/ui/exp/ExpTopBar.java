@@ -124,11 +124,6 @@ final class ExpTopBar extends FrameLayout {
         return expandedHeight;
     }
 
-    /** Height of the band that stays on screen once the page is scrolled. */
-    int getCollapsedHeight() {
-        return collapsedHeight;
-    }
-
     /**
      * Applies the scroll-driven collapse.
      *

@@ -18,6 +18,8 @@
     <string name="exp_status_running">正在运行</string>
     <string name="exp_status_idle">没有运行中的虚拟机</string>
     <string name="exp_status_idle_summary">从下方选择一台机器启动</string>
+    <!-- status card second line: "SDL · 4 核 · 2048 MB" (the machine name is prefixed in code) -->
+    <string name="exp_status_meta">%1$s · %2$d 核 · %3$d MB</string>
 
     <!-- count cards -->
     <string name="exp_count_total">虚拟机</string>

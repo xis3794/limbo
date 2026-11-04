@@ -154,6 +154,8 @@ final class ExpMachineListAdapter extends RecyclerView.Adapter<RecyclerView.View
         int inside = theme.dp(ExpTheme.STATUS_CARD_INSIDE_MARGIN_DP);
         card.setPadding(inside, inside, inside, inside);
         card.setMinimumHeight(theme.dp(84));
+        // RecyclerView rows carry RecyclerView.LayoutParams; the header container
+        // is a plain LinearLayout, so it re-maps these to LinearLayout.LayoutParams.
         LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         int side = theme.dp(ExpTheme.CARD_SIDE_MARGIN_DP);
@@ -184,7 +186,7 @@ final class ExpMachineListAdapter extends RecyclerView.Adapter<RecyclerView.View
         plate.addView(glyph);
         card.addView(plate);
 
-        // StatusCard uses a 16dp gap between the plate and the text block.
+        // StatusCard keeps a 16dp gap between the plate and the text block.
         View gap = new View(context);
         gap.setLayoutParams(new LinearLayout.LayoutParams(theme.dp(16), 1));
         card.addView(gap);
@@ -239,14 +241,14 @@ final class ExpMachineListAdapter extends RecyclerView.Adapter<RecyclerView.View
                 true);
         LinearLayout.LayoutParams totalParams = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        totalParams.setMargins(0, 0, halfGap, theme.dp(12));
+        totalParams.setMargins(0, 0, halfGap, 0);
         total.setLayoutParams(totalParams);
         row.addView(total);
 
         View runningCard = buildCountCard(R.string.exp_count_running, running ? "1" : "0", false);
         LinearLayout.LayoutParams runningParams = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        runningParams.setMargins(halfGap, 0, 0, theme.dp(12));
+        runningParams.setMargins(halfGap, 0, 0, 0);
         runningCard.setLayoutParams(runningParams);
         row.addView(runningCard);
         return row;
@@ -310,7 +312,7 @@ final class ExpMachineListAdapter extends RecyclerView.Adapter<RecyclerView.View
         title.setTextColor(theme.onSurface);
         title.setText(R.string.exp_all_machines);
         int side = theme.dp(ExpTheme.CARD_SIDE_MARGIN_DP);
-        title.setPadding(side, theme.dp(4), side, theme.dp(8));
+        title.setPadding(side, theme.dp(12), side, theme.dp(8));
         title.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return title;
@@ -328,6 +330,8 @@ final class ExpMachineListAdapter extends RecyclerView.Adapter<RecyclerView.View
         hint.setGravity(Gravity.CENTER);
         hint.setText(R.string.exp_empty_summary);
         hint.setLineSpacing(theme.dpf(4f), 1f);
+        hint.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         container.addView(hint);
 
         View gap = new View(context);
@@ -341,10 +345,14 @@ final class ExpMachineListAdapter extends RecyclerView.Adapter<RecyclerView.View
         action.setText(R.string.exp_empty_action);
         action.setGravity(Gravity.CENTER);
         action.setMinHeight(theme.dp(ExpTheme.MIN_TOUCH_TARGET_DP));
+        action.setMinWidth(theme.dp(ExpTheme.MIN_TOUCH_TARGET_DP));
         int padH = theme.dp(24);
         action.setPadding(padH, theme.dp(12), padH, theme.dp(12));
         action.setBackground(ExpDrawables.pill(theme.primary,
                 theme.dp(ExpTheme.MIN_TOUCH_TARGET_DP)));
+        // Wrap content, not the MATCH_PARENT width a vertical LinearLayout defaults to.
+        action.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         ExpDrawables.sink(action);
         action.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -358,6 +366,10 @@ final class ExpMachineListAdapter extends RecyclerView.Adapter<RecyclerView.View
     // ----------------------------------------------------------------- machine
 
     private void bindMachine(final MachineHolder holder, final Entry entry) {
+        // Recycled rows keep the press transform from the previous owner, so reset it.
+        holder.card.setScaleX(1f);
+        holder.card.setScaleY(1f);
+        holder.card.setAlpha(1f);
         holder.name.setText(entry.displayName);
         holder.meta.setText(entry.meta);
         holder.icon.setText(firstCharacter(entry.displayName));
@@ -535,6 +547,9 @@ final class ExpMachineListAdapter extends RecyclerView.Adapter<RecyclerView.View
             badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
             badge.setTextColor(theme.onTertiaryContainer);
             badge.setText(R.string.exp_badge_running);
+            // Height pinned to 24dp so the pill radius below is exactly half of it.
+            badge.setMinHeight(theme.dp(24));
+            badge.setGravity(Gravity.CENTER_VERTICAL);
             badge.setBackground(ExpDrawables.pill(theme.tertiaryContainer, theme.dp(24)));
             badge.setPadding(theme.dp(8), theme.dp(3), theme.dp(8), theme.dp(3));
             badge.setMaxLines(1);
@@ -557,6 +572,9 @@ final class ExpMachineListAdapter extends RecyclerView.Adapter<RecyclerView.View
             startLabel.setTypeface(theme.medium);
             startLabel.setTextColor(theme.primary);
             startLabel.setText(R.string.exp_start);
+            // Height pinned to 32dp so the pill radius below is exactly half of it.
+            startLabel.setMinHeight(theme.dp(32));
+            startLabel.setGravity(Gravity.CENTER);
             startLabel.setBackground(ExpDrawables.pill(ExpDrawables.alpha(theme.primary, 0.12f),
                     theme.dp(32)));
             startLabel.setPadding(theme.dp(12), theme.dp(6), theme.dp(12), theme.dp(6));

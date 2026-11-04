@@ -1,7 +1,6 @@
 package com.max2idea.android.limbo.ui.exp;
 
 import android.graphics.drawable.GradientDrawable;
-import android.os.Build;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -97,10 +96,5 @@ final class ExpDrawables {
             a = 255;
         }
         return (color & 0x00FFFFFF) | (a << 24);
-    }
-
-    /** Whether {@link View#setElevation} / rounded clipping is available (API 21+). */
-    static boolean hasElevation() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP;
     }
 }
