@@ -475,6 +475,46 @@ _build-qemu: ndk
 			objcopy --strip-debug "$$so" 2>/dev/null || true; \
 		done; \
 	fi
+	# Final DT_NEEDED pass, unconditionally and immediately before the
+	# libraries are copied out of obj/local.
+	#
+	# The pass above runs after `make _qemu`, but QEMU 11 emits
+	# libqemu-system-*.so from its own make rules, which can finish after that
+	# point - so the engine binary kept its versioned spellings
+	# (libgio-2.0.so.0, libgobject-2.0.so.0, libintl.so.8) while the APK only
+	# ships the unversioned names. That is precisely the "no screen for any
+	# backend, no log line" failure. Rewriting here covers every library in
+	# obj/local no matter which target produced it.
+	@for so in $(NDK_PROJECT_PATH)/obj/local/$(APP_ABI)/*.so; do \
+		[ -f "$$so" ] || continue; \
+		python3 $(LIMBO_PRJ_ROOT)/scripts/fix_needed.py "$$so" \
+			libglib-2.0.so.0=libglib-2.0.so \
+			libgmodule-2.0.so.0=libgmodule-2.0.so \
+			libgobject-2.0.so.0=libgobject-2.0.so \
+			libgio-2.0.so.0=libgio-2.0.so \
+			libintl.so.8=libintl.so \
+			libffi.so.7=libffi.so \
+			libffi.so.8=libffi.so \
+			libepoxy.so.0=libepoxy.so \
+			libgtk-4.so.1=libgtk-4.so \
+			libgdk-4.so.1=libgdk-4.so \
+			libgsk-4.so.1=libgsk-4.so \
+			libgdk_pixbuf-2.0.so.0=libgdk_pixbuf-2.0.so \
+			libcairo.so.2=libcairo.so \
+			libcairo-gobject.so.2=libcairo-gobject.so \
+			libpango-1.0.so.0=libpango-1.0.so \
+			libpangocairo-1.0.so.0=libpangocairo-1.0.so \
+			libpangoft2-1.0.so.0=libpangoft2-1.0.so \
+			libharfbuzz.so.0=libharfbuzz.so \
+			libfreetype.so.6=libfreetype.so \
+			libfontconfig.so.1=libfontconfig.so \
+			libfribidi.so.0=libfribidi.so \
+			libgraphene-1.0.so.0=libgraphene-1.0.so \
+			libvirglrenderer.so.1=libvirglrenderer.so \
+			>/dev/null 2>&1 || true; \
+	done; \
+	echo "[OK] final DT_NEEDED pass over obj/local"
+
 	$(INSTALL_LIBS)
 	$(RENAME_TUNCTL)
 	$(RENAME_PARPROUTED)

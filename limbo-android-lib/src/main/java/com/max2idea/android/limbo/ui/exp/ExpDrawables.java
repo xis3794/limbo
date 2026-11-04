@@ -1,7 +1,5 @@
 package com.max2idea.android.limbo.ui.exp;
 
-import android.content.Context;
-import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.view.MotionEvent;
@@ -18,7 +16,7 @@ final class ExpDrawables {
 
     /** PressFeedbackType.Sink: the whole surface scales down to this factor. */
     private static final float SINK_SCALE = 0.94f;
-    /** MiuixIndication press alpha delta applied on top of the surface alpha. */
+    /** MiuixIndication press alpha delta applied while the surface is pressed. */
     private static final float PRESS_ALPHA_DELTA = 0.10f;
 
     private ExpDrawables() {
@@ -33,11 +31,13 @@ final class ExpDrawables {
         return drawable;
     }
 
-    /** A flat rounded rectangle with a hairline stroke (light theme only). */
+    /** A flat rounded rectangle with a hairline stroke (used by the light theme). */
     static GradientDrawable roundedRect(int color, float radiusPx, int strokeColor,
                                         int strokeWidthPx) {
         GradientDrawable drawable = roundedRect(color, radiusPx);
-        drawable.setStroke(strokeWidthPx, strokeColor);
+        if (strokeWidthPx > 0 && (strokeColor >>> 24) != 0) {
+            drawable.setStroke(strokeWidthPx, strokeColor);
+        }
         return drawable;
     }
 
@@ -55,7 +55,7 @@ final class ExpDrawables {
     }
 
     /**
-     * Attaches Miuix's Sink press feedback (scale 0.94 + alpha −0.10) to a view.
+     * Attaches Miuix's Sink press feedback (scale 0.94, alpha −0.10) to a view.
      *
      * <p>This has to be explicit: Miuix cards default to {@code showIndication = false}
      * and NPatch passes {@code showIndication = true} at every call site, so a card
@@ -88,55 +88,7 @@ final class ExpDrawables {
         return view;
     }
 
-    /** Sets the window/inset background colour of the activity. */
-    static void setStatusBarColor(android.view.Window window, int color) {
-        if (window == null) {
-            return;
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            window.setStatusBarColor(color);
-        }
-    }
-
-    static void setNavigationBarColor(android.view.Window window, int color) {
-        if (window == null) {
-            return;
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            window.setNavigationBarColor(color);
-        }
-    }
-
-    /** Light bar icons on a dark background (and vice versa) where the API allows it. */
-    @SuppressWarnings("deprecation")
-    static void setLightSystemBars(android.view.Window window, boolean lightBackground) {
-        if (window == null) {
-            return;
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            View decor = window.getDecorView();
-            int flags = decor.getSystemUiVisibility();
-            if (lightBackground) {
-                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-            } else {
-                flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                if (lightBackground) {
-                    flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
-                } else {
-                    flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
-                }
-            }
-            decor.setSystemUiVisibility(flags);
-        }
-    }
-
-    /** Full-screen transparent highlight used on the pill bar tabs. */
-    static GradientDrawable transparent() {
-        return roundedRect(Color.TRANSPARENT, 0f);
-    }
-
+    /** Scales a colour's alpha channel to {@code factor} (0..1). */
     static int alpha(int color, float factor) {
         int a = Math.round(factor * 255f);
         if (a < 0) {
@@ -147,8 +99,8 @@ final class ExpDrawables {
         return (color & 0x00FFFFFF) | (a << 24);
     }
 
-    /** Convenience: dp from a context, used where no ExpTheme is at hand. */
-    static int dp(Context context, float value) {
-        return Math.round(value * context.getResources().getDisplayMetrics().density);
+    /** Whether {@link View#setElevation} / rounded clipping is available (API 21+). */
+    static boolean hasElevation() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP;
     }
 }

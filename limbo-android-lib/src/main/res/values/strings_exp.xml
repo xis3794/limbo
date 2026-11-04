@@ -1,24 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Strings for the experimental NPatch / Miuix style UI (package ui/exp).
+
+    Wording follows docs/team/npatch-miuix-style-spec.md section 5. The
+    exp_settings_* keys are also read by the legacy settings screen
+    (AppSettingsActivity), so they must stay even if the new list does not use them.
+-->
 <resources>
+
+    <!-- top bar / page -->
     <string name="exp_title">虚拟机</string>
-    <string name="exp_subtitle">选择机器以编辑，或直接启动</string>
-    <string name="exp_back_legacy">返回旧版界面</string>
-    <string name="exp_empty">还没有虚拟机\n点击右下角“＋”新建一台</string>
+    <string name="exp_all_machines">全部虚拟机</string>
     <string name="exp_add">新建</string>
-    <string name="exp_start">启动</string>
-    <string name="exp_running">运行中</string>
+    <string name="exp_settings">设置</string>
+
+    <!-- status card -->
+    <string name="exp_status_running">正在运行</string>
+    <string name="exp_status_idle">没有运行中的虚拟机</string>
+    <string name="exp_status_idle_summary">从下方选择一台机器启动</string>
+
+    <!-- count cards -->
+    <string name="exp_count_total">虚拟机</string>
+    <string name="exp_count_running">运行中</string>
+
+    <!-- machine list -->
     <string name="exp_machine_meta">%1$s · %2$d 核 · %3$d MB</string>
+    <string name="exp_badge_running">运行中</string>
+    <string name="exp_start">启动</string>
     <string name="exp_unknown_arch">未知架构</string>
     <string name="exp_config_unavailable">无法读取机器配置</string>
     <string name="exp_unnamed_machine">未命名虚拟机</string>
+
+    <!-- empty state -->
+    <string name="exp_empty_summary">还没有虚拟机，点下方“新建”创建第一台</string>
+    <string name="exp_empty_action">新建虚拟机</string>
+
+    <!-- dialogs -->
     <string name="exp_new_machine">新建虚拟机</string>
     <string name="exp_machine_name_hint">输入机器名称</string>
     <string name="exp_create">创建</string>
     <string name="exp_cancel">取消</string>
+    <string name="exp_name_required">请输入机器名称</string>
+    <string name="exp_name_taken">已存在同名虚拟机</string>
     <string name="exp_delete_title">删除虚拟机</string>
     <string name="exp_delete_message">确定删除“%1$s”吗？此操作无法撤销。</string>
     <string name="exp_delete">删除</string>
+
+    <!-- settings entry for the experimental UI (owned by the legacy settings screen) -->
     <string name="exp_settings_category">实验性功能</string>
     <string name="exp_settings_ui_title">新版界面</string>
     <string name="exp_settings_ui_summary">使用全新的虚拟机列表界面。关闭后立即回到旧版界面，旧版功能不受影响。</string>
+
 </resources>
