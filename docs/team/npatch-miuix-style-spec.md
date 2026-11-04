@@ -4,6 +4,8 @@
 > 数据来源：`7723mod/NPatch` 的 `manager/src/main/java/top/nkbe/npatch/ui/**` 与
 > `miuix-kotlin-multiplatform/miuix` 的 `theme/Colors.kt`、`basic/Card.kt`（Miuix 0.9.4）。
 > 本地副本：`/tmp/npatch`、`/tmp/miuix`（可再查）。
+> **本文件已于第二轮评审后修正 6 处错误**（body1 字号、InsideMargin 归属、顶栏高度 56→52、
+> 底栏圆角/高度/选中态/文字、大标题 34→32sp、按压反馈数值）。若你读过修正前的版本，以本版为准。
 
 ## 0. 硬约束（我们的工程现实）
 
@@ -65,7 +67,7 @@
 | 令牌 | 值 | 说明 |
 |---|---|---|
 | 卡片圆角 `CardDefaults.CornerRadius` | **16.dp** | 所有卡片统一 16dp |
-| 卡片 `insideMargin` | **12.dp** | 卡片内边距（AppItem） |
+| 卡片 `insideMargin` | **12.dp**（NPatch 在每个调用点显式传；Miuix 默认是 0.dp） | 卡片内边距（AppItem） |
 | 大卡片 `insideMargin` | **20.dp / 16.dp** | StatusCard 用 20，CountCard 用 16 |
 | 卡片外边距 | 水平 **12.dp**，卡片间距 **8.dp** | `padding(horizontal=12.dp).padding(bottom=8.dp)` |
 | 页面内容上边距 | innerPadding + **12.dp** | |
@@ -88,7 +90,7 @@
 | `headline1` | **17.sp** | 卡片主标题（StatusCard 用 17sp Bold） |
 | `headline2` | **16.sp** | 列表项标题 |
 | `subtitle` | **14.sp Bold** | 副标题 |
-| `body1` | **15.sp** | 统计卡标题（CountCard 用 15sp Medium） |
+| `body1` | **16.sp** | 注意：CountCard 标题**不是** body1，它硬编码 15sp Medium |
 | `body2` | **14.sp** | 普通正文 |
 | — | **13.sp** | 卡片说明文字（NPatch 自定义） |
 | — | **26.sp SemiBold** | 统计卡数字（NPatch 自定义） |
@@ -183,27 +185,69 @@ bg.setColor(cardColor);                     // surfaceContainer
 view.setBackground(bg);
 view.setClipToOutline(false);
 ```
-按下反馈：`view.setOnTouchListener` 或 `View.OnClickListener` + `StateListAnimator` 简化版：
+按下反馈**精确数值**（Miuix 实测，不要用近似值）：
+- `PressFeedbackType.Sink`：整体缩放到 **0.94**（`sinkAmount = 0.94f`，PressFeedback.kt:32）
+- 同时叠加按下变暗：alpha 再减 **0.10**（`PRESS_ALPHA_DELTA = 0.10f`，MiuixIndication.kt:27）
+
 ```java
-// 按下：alpha 0.92 + scale 0.98；抬起恢复
+// 按下：scale 0.94 + 整体亮度/alpha 降低 0.10；抬起用 ~150ms 回弹
+view.setOnTouchListener((v, e) -> {
+    switch (e.getActionMasked()) {
+        case MotionEvent.ACTION_DOWN:
+            v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(90).start();
+            v.setAlpha(0.90f);
+            break;
+        case MotionEvent.ACTION_CANCEL:
+        case MotionEvent.ACTION_UP:
+            v.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
+            v.setAlpha(1f);
+            break;
+    }
+    return false;   // 让 click 继续生效
+});
 ```
+**注意**：卡片必须显式开启按压反馈。Miuix 的 `Card` 默认 `showIndication = false`，
+NPatch 在每个卡片处都显式传了 `showIndication = true`；原生实现里就是上面这段 touch 监听，
+漏掉它卡片会完全没有按压反馈。
 
 ### 6.2 顶栏
-- 高度 = statusBarHeight + 56dp；`fitsSystemWindows` 处理。
+- 高度 = statusBarHeight + **52dp**（`TopAppBarDefaults.CollapsedHeight`）；`fitsSystemWindows` 处理。
 - 透明背景；内容顶部 PaddingTop = statusBarHeight。
 - 用 `RecyclerView.OnScrollListener` 监听滚动：`dy > 8` 时给顶栏加半透明模糊背景（`#F2FFFFFF` / `#F2242424`），滚回顶部时移除。
-- 大标题：`TextView` 34sp Bold，随滚动 `setScaleX/Y` 或改变 padding 收缩；简单做法是滚动后 `setVisibility(GONE)` 显示小标题 20sp。
+- 大标题：`TextView` **32sp**（Miuix `textStyles.title1`），随滚动淡出；收缩后标题用 **20sp**（`title3`）。
 
-### 6.3 悬浮胶囊底栏
+### 6.3 悬浮胶囊底栏（**数值来自 FloatingGlassBottomBar.kt 实测**）
+
+| 项 | 值 | 说明 |
+|---|---|---|
+| 整体高度 | **64.dp** | `.height(64.dp)` |
+| 内边距 | **4.dp** | `.padding(4.dp)`（外层容器） |
+| 形状 | **CircleShape**（全圆） | 不是固定 28dp 圆角 |
+| 每个 tab 高度 | **56.dp** | |
+| 每个 tab 最小宽度 | **76.dp** | |
+| 选中指示器 | `primary.copy(alpha = 0.15f)` 的胶囊 | **不是实心 primary 块** |
+| 选中文字色 | **primary**（`#3482FF` / `#277AF7`） | **不是白色** |
+| 未选中文字色 | `onSurfaceVariantSummary`（`#99000000` / `#80FFFFFF`） | |
+| 文字字号 | **11.sp**，lineHeight 14.sp | 选中时 SemiBold，未选中 Normal |
+| 位置 | `Alignment.BottomCenter` | 水平居中贴底（对外层而言），不是距底 24dp 悬浮 |
+
 ```java
-LinearLayout bar;                 // horizontal，gravity center
+LinearLayout bar = new LinearLayout(ctx);
+bar.setOrientation(LinearLayout.HORIZONTAL);
+bar.setGravity(Gravity.CENTER_VERTICAL);
 GradientDrawable pill = new GradientDrawable();
-pill.setCornerRadius(dp(28));     // 高 56dp → 半径 28 做成胶囊
-pill.setColor(isDark ? 0xF2242424 : 0xF2FFFFFF);
+pill.setShape(GradientDrawable.RECTANGLE);
+pill.setCornerRadius(dp(64) / 2f);   // 高 64dp → 半径 32dp 得到 CircleShape 效果
+pill.setColor(isDark ? 0xFF242424 : 0xFFFFFFFF);
 bar.setBackground(pill);
-bar.setElevation(dp(8));
-// 距底部 24dp + navigationBar 高度；水平居中，宽度 wrap_content，内边距 8dp
-// 每个 tab：图标 22dp + 文字 14sp，选中项背景 = primary 圆角胶囊(#3482FF)，文字白色；未选中 = 透明，文字 onSurfaceVariantSummary
+bar.setPadding(dp(4), dp(4), dp(4), dp(4));
+// 外层用 FrameLayout，bar 的 LayoutParams gravity = BOTTOM|CENTER_HORIZONTAL
+// 阴影：不用 setElevation（NPatch 用 dropShadow/innerShadow），原生可用极淡的
+//    Paint.setShadowLayer 或干脆不加，HyperOS 观感本来就平
+// 每个 tab：LinearLayout(vertical 或 horizontal) 高 56dp 最小宽 76dp
+//   选中：背景 = 圆角胶囊 primary@15%，图标+文字 = primary
+//   未选中：背景透明，图标+文字 = onSurfaceVariantSummary
+//   文字 11sp，选中 SemiBold
 ```
 
 ### 6.4 圆角方形图标（机器首字）
