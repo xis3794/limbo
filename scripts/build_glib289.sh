@@ -178,7 +178,7 @@ done
 # Rewrite the versioned DT_NEEDED spellings in place (fix_needed.py overwrites
 # the strings without relocating .dynstr, which the Huawei linker requires).
 # Missing a rewrite means "library not found" at load time, i.e. no display.
-NEEDED_MAP="libglib-2.0.so.0=libglib-2.0.so libgmodule-2.0.so.0=libgmodule-2.0.so libgobject-2.0.so.0=libgobject-2.0.so libgio-2.0.so.0=libgio-2.0.so"
+NEEDED_MAP="libglib-2.0.so.0=libglib-2.0.so libgmodule-2.0.so.0=libgmodule-2.0.so libgobject-2.0.so.0=libgobject-2.0.so libgio-2.0.so.0=libgio-2.0.so libintl.so.8=libintl.so"
 for f in $GLIB_SOS; do
   python3 "$JNI/../../../../scripts/fix_needed.py" "$OBJ/$f.so" $NEEDED_MAP || true
 done
