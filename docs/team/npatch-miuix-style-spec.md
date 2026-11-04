@@ -77,17 +77,38 @@
 | 顶栏模糊半径 | **30.dp** | |
 | 触摸反馈 | PressFeedbackType.Sink | 按下时整体**轻微缩小 + 变暗** |
 
-## 3. 字号（NPatch 实际使用）
+## 3. 字号（Miuix `TextStyles.kt` 实测值）
 
-| 位置 | 字号 | 字重 |
+| Miuix 令牌 | 字号 | 用在哪 |
 |---|---|---|
-| 大标题（顶栏 largeTitle） | 系统 TopAppBar 默认（约 28–34sp） | Bold |
-| 卡片主标题 | **17.sp** | **Bold** |
-| 卡片说明 | **13.sp** | Normal |
-| 统计卡标题 | **15.sp** | Medium |
-| 统计卡数字 | **26.sp** | SemiBold |
-| 列表项标题 | 约 **16.sp** | Medium |
-| 列表项副标题 | 约 **13.sp** | Normal |
+| `title1` | **32.sp** | 顶栏大标题 largeTitle |
+| `title2` | **24.sp** | 次级大标题 |
+| `title3` | **20.sp** | 收缩后的小标题 |
+| `title4` | **18.sp** | — |
+| `headline1` | **17.sp** | 卡片主标题（StatusCard 用 17sp Bold） |
+| `headline2` | **16.sp** | 列表项标题 |
+| `subtitle` | **14.sp Bold** | 副标题 |
+| `body1` | **15.sp** | 统计卡标题（CountCard 用 15sp Medium） |
+| `body2` | **14.sp** | 普通正文 |
+| — | **13.sp** | 卡片说明文字（NPatch 自定义） |
+| — | **26.sp SemiBold** | 统计卡数字（NPatch 自定义） |
+
+字重：Bold→`Typeface.BOLD`；SemiBold/Medium 在原生 View 下用 `Typeface.DEFAULT_BOLD` 或
+`Typeface.create("sans-serif-medium", Typeface.NORMAL)`（后者更接近 Medium，优先用它）。
+
+## 3.1 顶栏尺寸（`TopAppBarDefaults`）
+
+| 令牌 | 值 |
+|---|---|
+| `CollapsedHeight` | **52.dp**（收缩后顶栏高） |
+| `TitlePadding` | **26.dp** |
+| `NavigationIconPadding` | **16.dp** |
+| `ActionIconPadding` | **16.dp** |
+| `LargeTitleBottomPadding` | **4.dp** |
+| `SubtitleBottomPadding` | **8.dp** |
+
+展开态顶栏高度 = statusBarHeight + 52dp + 大标题高度（约 32sp 行高 40dp）+ LargeTitleBottomPadding。
+滚动后：大标题淡出，52dp 顶栏保留，标题以约 18–20sp 显示在中部。
 
 字重对应：Bold→`Typeface.BOLD`，SemiBold→`Typeface.DEFAULT_BOLD`（或 `create(Typeface.DEFAULT, 600)` 不一定支持，用 BOLD），Medium→`Typeface.DEFAULT_BOLD` 偏重，可接受。
 
