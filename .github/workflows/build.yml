@@ -428,63 +428,10 @@ jobs:
           # nothing staged them, so libqemu needed libgio-2.0.so.0 and
           # libgobject-2.0.so.0 that were not in the APK.
           echo "=== checking every DT_NEEDED of the shipped libraries ==="
-          python3 - "$LIBS" "$OBJ" <<'PY'
-          import sys, os, struct, glob
-
-          libs_dir, obj_dir = sys.argv[1], sys.argv[2]
-          shipped = {os.path.basename(p) for p in glob.glob(os.path.join(obj_dir, "*.so"))}
-          # Android platform libraries are provided by the system, never by us.
-          SYSTEM_PREFIXES = (
-              "libc.so", "libm.so", "libdl.so", "liblog.so", "libz.so",
-              "libandroid.so", "libGLESv", "libEGL.so", "libvulkan",
-              "libstdc++.so", "libc++", "libjnigraphics", "libnativewindow",
-              "libaaudio.so", "libOpenSLES", "libmediandk", "libsync.so",
-          )
-
-          def needed(path):
-              data = open(path, "rb").read()
-              if data[:4] != b"\x7fELF" or data[4] != 2:
-                  return []
-              (_, _, _, _, phoff, shoff, _, _, phentsize, phnum,
-               shentsize, shnum, _) = struct.unpack("<HHIQQQIHHHHHH", data[16:64])
-              sh = []
-              for i in range(shnum):
-                  off = shoff + i * shentsize
-                  (_, typ, _, _, offset, size, link, _, _, _) = struct.unpack("<IIQQQQIIQQ", data[off:off + 64])
-                  sh.append((typ, offset, size, link))
-              dyn = [x for x in sh if x[0] == 6]
-              if not dyn:
-                  return []
-              _, doff, dsize, dlink = dyn[0]
-              stroff = sh[dlink][1]
-
-              def cstr(idx):
-                  o = stroff + idx
-                  return data[o:data.index(b"\0", o)].decode("utf-8", "replace")
-
-              out, o = [], doff
-              while o < doff + dsize:
-                  tag, val = struct.unpack("<qQ", data[o:o + 16])
-                  o += 16
-                  if tag == 0:
-                      break
-                  if tag == 1:
-                      out.append(cstr(val))
-              return out
-
-          problems = 0
-          for path in sorted(glob.glob(os.path.join(obj_dir, "*.so"))):
-              base = os.path.basename(path)
-              for dep in needed(path):
-                  if dep in shipped or dep.startswith(SYSTEM_PREFIXES):
-                      continue
-                  print(f"::error::{base} needs {dep}, which is not among the shipped libraries")
-                  problems += 1
-          if problems:
-              print("::error::unresolved DT_NEEDED entries; the engine would fail to load (no screen at all)")
-              sys.exit(1)
-          print(f"OK: all DT_NEEDED entries resolve against {len(shipped)} shipped libraries")
-          PY
+          # A standalone script rather than an inline heredoc: the YAML
+          # block scalar made the indentation fragile and github rejected the
+          # whole workflow file when it did not round-trip.
+          python3 "$GITHUB_WORKSPACE/scripts/check_shipped_needed.py" "$OBJ"
 
       - name: Build APK with Gradle 7.0.2
         env:
