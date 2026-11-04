@@ -173,7 +173,9 @@ for base in $GLIB_SOS; do
     echo "ERROR: $base.so missing from $INSTALL/lib" >&2
     exit 1
   fi
-  cp -f "$src" "$OBJ/$base.so"
+  # -L dereferences: the candidates are usually SONAME symlinks, and copying a
+  # link into obj/local would leave a dangling reference inside the APK.
+  cp -fL "$src" "$OBJ/$base.so"
   echo ">> $base.so -> obj/local ($(stat -c%s "$OBJ/$base.so") bytes)"
 done
 
