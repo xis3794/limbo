@@ -218,8 +218,28 @@ jobs:
             # GTK requires GLib >= 2.84 while QEMU links Limbo's 2.76.6, so the
             # GTK stack gets its own 2.89.3 build (see scripts/build_glib289.sh).
             # A tag, not the moving GMain default branch.
-            git clone --depth 1 --branch 2.89.3 --single-branch \
-              https://gitlab.gnome.org/GNOME/glib.git glib289
+            #
+            # GitHub's mirror comes first: gitlab.gnome.org intermittently
+            # answers 503, and a failed clone here aborts the whole build before
+            # anything else runs. Upstream GitLab stays as the fallback.
+            GLIB_CLONED=0
+            for attempt in 1 2 3; do
+              for url in https://github.com/GNOME/glib.git https://gitlab.gnome.org/GNOME/glib.git; do
+                if git clone --depth 1 --branch 2.89.3 --single-branch "$url" glib289; then
+                  echo ">> glib (GTK stack) from $url"
+                  GLIB_CLONED=1
+                  break
+                fi
+                rm -rf glib289
+                echo ">> glib clone failed ($url), attempt $attempt"
+              done
+              [ "$GLIB_CLONED" = "1" ] && break
+              sleep 10
+            done
+            if [ "$GLIB_CLONED" != "1" ]; then
+              echo "::error::could not fetch glib 2.89.3 from GitHub or GitLab after 3 attempts"
+              exit 1
+            fi
             echo ">> glib (GTK stack): $(git -C glib289 describe --tags --always)"
           fi
 
