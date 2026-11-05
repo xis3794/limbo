@@ -189,12 +189,82 @@ ninja -C "$BUILD" install
 # Ship every shared library the GTK stack produced.  QEMU dlopens libgtk-4.so
 # and it in turn needs the cairo/pango/gdk-pixbuf/... siblings from the same
 # install prefix, so the whole lib dir goes into the APK.
+#
+# But NOT over the QEMU-side libraries that already live in obj/local.  This
+# glob used to copy everything, and the GTK prefix contains its own
+# proxy-libintl (pulled in as a meson wrap), which landed on top of the
+# libintl.so that ndk-build compiles from compat/intl/intl_stubs.c.  That stub
+# is the only file in the tree that defines the C23 sized-free helpers, and
+# libglib-2.0.so has a real global reference to free_sized, so the next APK
+# died on load with
+#     cannot locate symbol "free_sized" referenced by libglib-2.0.so
+# before QEMU ran: SDL, VNC and GTK all dead, nothing in the log.
+#
+# The list below are the libraries the QEMU side owns.  Stems are compared
+# before the first ".so", so a versioned sibling (libintl.so.8) is protected
+# along with the plain name.
+PROTECTED_STEMS="
+libintl
+libiconv
+libcompat-musl
+libcompat-limbo
+libcompat-SDL2-addons
+libcompat-SDL2-ext
+libdiag
+liblimbo
+libpixman-1
+libpcre2-8
+libffi
+libglib-2.0
+libgmodule-2.0
+libgobject-2.0
+libgio-2.0
+"
+
+is_protected() {
+  stem=$(basename "$1" | sed 's/\.so.*$//')
+  for protected in $PROTECTED_STEMS; do
+    [ "$stem" = "$protected" ] && return 0
+  done
+  return 1
+}
+
 count=0
+skipped=""
 for so in "$INSTALL"/lib/lib*.so*; do
   [ -f "$so" ] || continue
+  if is_protected "$so"; then
+    skipped="$skipped $(basename "$so")"
+    continue
+  fi
   cp -Lf "$so" "$OBJ/"
   count=$((count + 1))
 done
+[ -n "$skipped" ] && echo ">> kept the QEMU-side copies of:$skipped"
+
+# Hard stop if the sized-free stubs are missing again: this is the exact
+# defect that shipped a build where no display backend could start, and it is
+# invisible until the APK is installed on a device.
+STUB_INTL="$OBJ/libintl.so"
+if [ ! -f "$STUB_INTL" ]; then
+  echo "ERROR: $STUB_INTL is missing - libglib-2.0.so needs free_sized from it" >&2
+  exit 1
+fi
+if ! python3 - "$STUB_INTL" <<'PY'
+import sys
+data = open(sys.argv[1], "rb").read()
+missing = [s for s in (b"free_sized\0", b"free_aligned_sized\0") if s not in data]
+if missing:
+    print("missing: " + ", ".join(m.decode().strip("\0") for m in missing))
+    raise SystemExit(1)
+PY
+then
+  echo "ERROR: $STUB_INTL no longer defines free_sized/free_aligned_sized." >&2
+  echo "       libglib-2.0.so references them; dlopen would fail and no" >&2
+  echo "       display backend would start. Refusing to continue." >&2
+  exit 1
+fi
+echo "[OK] libintl.so keeps the sized-free stubs (free_sized present)"
 
 if [ ! -f "$INSTALL/lib/pkgconfig/gtk4.pc" ]; then
   echo "ERROR: gtk4.pc was not installed - QEMU's meson will not find GTK" >&2

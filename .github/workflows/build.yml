@@ -453,6 +453,21 @@ jobs:
           # whole workflow file when it did not round-trip.
           python3 "$GITHUB_WORKSPACE/scripts/check_shipped_needed.py" "$OBJ"
 
+          # The gate above proves every depended-on *library* is shipped. This
+          # one proves every depended-on *symbol* is provided by something in
+          # the APK or by the Android platform. Both are needed, because
+          # shipping libintl.so is not enough if it is the wrong libintl.so.
+          #
+          # That is exactly how a release shipped with SDL, VNC and GTK all
+          # dead: the GTK build's own proxy-libintl overwrote the ndk-build
+          # libintl.so that carries the C23 sized-free stubs, and
+          # libglib-2.0.so has a real global reference to free_sized, so dlopen
+          # of the engine failed with "cannot locate symbol free_sized" before
+          # QEMU ever ran.
+          echo "=== checking that every referenced symbol resolves ==="
+          python3 "$GITHUB_WORKSPACE/scripts/check_resolvable_symbols.py" \
+            "$OBJ" "$NDK_ROOT"
+
       - name: Build APK with Gradle 7.0.2
         env:
           JAVA_HOME: ${{ steps.jdk11.outputs.path }}
