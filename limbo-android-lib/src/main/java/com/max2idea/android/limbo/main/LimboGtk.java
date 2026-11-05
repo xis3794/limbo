@@ -97,6 +97,7 @@ public final class LimboGtk {
         }
         if (!sNativeAvailable) {
             Log.w(TAG, "GTK backend is not part of this build");
+            Config.gtkInitFailed = true;
             return false;
         }
         installBlackTheme(context);
@@ -106,9 +107,11 @@ public final class LimboGtk {
             if (!ok) {
                 Log.e(TAG, "gdk_android_initialize() failed");
             }
+            Config.gtkInitFailed = !ok;
             return ok;
         } catch (Throwable t) {
             Log.e(TAG, "GTK init crashed: " + t);
+            Config.gtkInitFailed = true;
             return false;
         }
     }

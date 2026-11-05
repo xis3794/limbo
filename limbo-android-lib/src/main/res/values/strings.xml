@@ -600,4 +600,5 @@
     <string name="gpu_accel">GPU acceleration (virgl)</string>
     <string name="gpu_accel_summary">Render the guest with the device GPU through virtio-gpu-gl. Requires a QEMU build with OpenGL and virglrenderer.</string>
     <string name="gtk_unavailable">This QEMU build has no GTK backend</string>
+    <string name="gtk_init_failed_sdl">"The GTK display could not start, switching this machine to SDL"</string>
 </resources>

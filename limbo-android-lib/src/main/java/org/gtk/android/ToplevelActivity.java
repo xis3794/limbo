@@ -69,6 +69,9 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 public class ToplevelActivity extends Activity {
 	public final static String toplevelIdentifierKey = "gdk/toplevel-identifier";
 
@@ -625,6 +628,25 @@ public class ToplevelActivity extends Activity {
 	private ToplevelView view;
 	private boolean fullscreenState;
 
+	/**
+	 * Set by the host activity before {@code super.onCreate()} when the GDK
+	 * android backend is not usable in this process. Every native method in
+	 * this class is registered by {@code gdk_android_initialize()}, so calling
+	 * one of them while it is false throws UnsatisfiedLinkError.
+	 */
+	public static volatile boolean gdkUnavailable = false;
+
+	/**
+	 * Every native method of this class is registered by
+	 * {@code gdk_android_initialize()}. When that failed the whole GtkThread
+	 * surface is missing, so calling one of them throws UnsatisfiedLinkError
+	 * instead of doing nothing - the lifecycle callbacks below have to be able
+	 * to ask first.
+	 */
+	private static boolean gdkCallable() {
+		return !gdkUnavailable;
+	}
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		this.fullscreenState = false;
@@ -638,44 +660,84 @@ public class ToplevelActivity extends Activity {
 		this.view = new ToplevelView();
 		setContentView(this.view);
 
+		if (gdkUnavailable) {
+			Log.e(TAG, "GDK android backend is not initialised, not binding this activity");
+			return;
+		}
+
 		final long[] possibleIdentifiers = {
 			savedInstanceState != null ? savedInstanceState.getLong(toplevelIdentifierKey, 0) : 0L,
 			getIntent().getLongExtra(toplevelIdentifierKey, 0),
 		};
-		GlibContext.blockForMain(new Runnable() {
-			@Override
-			public void run() {
-				for (long identifier : possibleIdentifiers) {
-					if (identifier == 0) {
-						continue;
-					}
+
+		long savedIdentifier = 0;
+		for (long identifier : possibleIdentifiers) {
+			if (identifier != 0) {
+				savedIdentifier = identifier;
+				break;
+			}
+		}
+
+		if (savedIdentifier != 0) {
+			/*
+			 * A window this activity used to own is still registered in GDK, so
+			 * the GTK main loop is up (it lives inside QEMU's gtk_init()). GDK
+			 * requires those calls on its own thread, hence runOnMain.
+			 *
+			 * The wait is bounded on purpose. The previous code awaited an
+			 * unbounded CountDownLatch here, and on the first launch - when no
+			 * identifier exists yet and the GTK loop has not started - that
+			 * never returned: the UI thread was wedged forever. That is the
+			 * "start hangs, screen goes black" report (the process was later
+			 * killed by gtk_init()'s exit(1)).
+			 */
+			final long identifier = savedIdentifier;
+			final CountDownLatch barrier = new CountDownLatch(1);
+			GlibContext.runOnMain(new Runnable() {
+				@Override
+				public void run() {
 					try {
 						bindNative(identifier);
-						return;
 					} catch (UnregisteredSurfaceException e) {
 						nativeIdentifier = 0;
+					} catch (Throwable t) {
+						nativeIdentifier = 0;
+						Log.w(TAG, "Could not rebind the GTK surface: " + t);
+					} finally {
+						barrier.countDown();
 					}
 				}
-
-				GdkContext._set_latest_activity(ToplevelActivity.this);
-
-				Intent intent = getIntent();
-				if (intent.getData() != null) {
-					String hint = "";
-					if (intent.getAction() != null) {
-						String[] action = intent.getAction().split("\\.");
-						hint = action[action.length - 1].toLowerCase();
-					}
-					GdkContext.open(intent.getData(), hint);
-				} else {
-					GdkContext.activate();
+			});
+			try {
+				if (!barrier.await(2, TimeUnit.SECONDS)) {
+					Log.e(TAG, "GTK did not rebind the surface in time");
 				}
-
-				if (nativeIdentifier == 0) {
-					Log.e(TAG, "Call to activate did not spawn a new window");
-				}
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
 			}
-		});
+			if (nativeIdentifier != 0) {
+				return;
+			}
+		}
+
+		/*
+		 * First window in this process (or the rebind failed). Nothing to do
+		 * here: the host activity was already handed to gdk_android_initialize(),
+		 * which called gdk_android_set_latest_activity() for it, and the
+		 * gdk_android_toplevel_present() backend path claims that unbound
+		 * activity by itself (it calls bindNative() and skips spawning a new
+		 * one) as soon as QEMU presents its window.
+		 *
+		 * GdkContext.activate()/open() are deliberately not used: they go
+		 * through g_application_activate(g_application_get_default()), and QEMU
+		 * is not a GApplication, so the default application is NULL and the call
+		 * does nothing.
+		 */
+		try {
+			GdkContext._set_latest_activity(ToplevelActivity.this);
+		} catch (Throwable t) {
+			Log.w(TAG, "Could not register this activity as the GTK host: " + t);
+		}
 	}
 
 	/**
@@ -712,6 +774,9 @@ public class ToplevelActivity extends Activity {
 	}
 
 	private void updateToplevelState() {
+		if (!gdkCallable()) {
+			return;
+		}
 		final boolean hasFocus = hasWindowFocus();
 		final boolean isFullscreen = this.fullscreenState;
 		GlibContext.runOnMain(new Runnable() {
@@ -725,6 +790,10 @@ public class ToplevelActivity extends Activity {
 	@SuppressWarnings("deprecation")
 	@Override
 	public void onBackPressed() {
+		if (!gdkCallable()) {
+			super.onBackPressed();
+			return;
+		}
 		GlibContext.runOnMain(new Runnable() {
 			@Override
 			public void run() {
@@ -736,6 +805,9 @@ public class ToplevelActivity extends Activity {
 	@Override
 	public void onConfigurationChanged(Configuration newConfig) {
 		super.onConfigurationChanged(newConfig);
+		if (!gdkCallable()) {
+			return;
+		}
 		GlibContext.runOnMain(new Runnable() {
 			@Override
 			public void run() {
@@ -775,7 +847,7 @@ public class ToplevelActivity extends Activity {
 
 	@Override
 	protected void onDestroy() {
-		if (isFinishing()) {
+		if (isFinishing() && gdkCallable()) {
 			GlibContext.runOnMain(new Runnable() {
 				@Override
 				public void run() {
@@ -788,6 +860,10 @@ public class ToplevelActivity extends Activity {
 
 	@Override
 	protected void onActivityResult(int requestCode, int resultCode, final Intent data) {
+		if (!gdkCallable()) {
+			super.onActivityResult(requestCode, resultCode, data);
+			return;
+		}
 		final int request = requestCode;
 		final int result = resultCode;
 		GlibContext.runOnMain(new Runnable() {

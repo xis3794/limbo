@@ -177,12 +177,22 @@ public class Config {
     public static boolean enableVirgl = false;
 
     /**
+     * Set when GDK's android backend could not be initialised in this process
+     * (libgtk-4.so missing, dlopen failed, no JNI VM...). GTK then has no
+     * display to open at all, QEMU's gtk_init() fails before the guest ever
+     * boots, and on Android gtk_init() calls exit(1) - it takes the whole app
+     * down. Once this is set the app stops offering GTK and starts every
+     * machine with SDL instead, for the rest of the process.
+     */
+    public static boolean gtkInitFailed = false;
+
+    /**
      * GTK's GDK android backend needs API 31+ (the AMotionEvent/AKeyEvent JNI
      * helpers are only exported by libandroid.so from API 31 on), so an
      * engine built with GTK still cannot be used on older devices.
      */
     public static boolean isGtkUsable() {
-        return enableGtk && engineHasGtk
+        return enableGtk && engineHasGtk && !gtkInitFailed
                 && android.os.Build.VERSION.SDK_INT >= 31;
     }
 

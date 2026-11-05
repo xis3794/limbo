@@ -3149,7 +3149,7 @@ index 9ebe7e8..a3c009d 100644
  }
  
  
-@@ -2498,10 +2353,7 @@ static gboolean gtkinit;
+@@ -2498,16 +2353,13 @@ static gboolean gtkinit;
  
  static void gtk_display_init(DisplayState *ds, DisplayOptions *opts)
  {
@@ -3160,6 +3160,13 @@ index 9ebe7e8..a3c009d 100644
      GtkIconTheme *theme;
      char *dir;
      int idx;
+ 
+     if (!gtkinit) {
+         fprintf(stderr, "gtk initialization failed\n");
+-        exit(1);
++        return; /* Android: no exit(1), the Java side falls back to SDL */
+     }
+     assert(opts->type == DISPLAY_TYPE_GTK);
 @@ -2514,16 +2366,15 @@ static void gtk_display_init(DisplayState *ds, DisplayOptions *opts)
      s = g_malloc0(sizeof(*s));
      s->opts = opts;
@@ -3264,7 +3271,7 @@ index 9ebe7e8..a3c009d 100644
      }
  #ifdef CONFIG_GTK_CLIPBOARD
      gd_clipboard_init(s);
-@@ -2611,29 +2457,13 @@ static void gtk_display_init(DisplayState *ds, DisplayOptions *opts)
+@@ -2611,29 +2457,23 @@ static void gtk_display_init(DisplayState *ds, DisplayOptions *opts)
  
  static void early_gtk_display_init(DisplayOptions *opts)
  {
@@ -3295,8 +3302,18 @@ index 9ebe7e8..a3c009d 100644
 -        /* don't exit yet, that'll break -help */
 -        return;
 -    }
-+    gtk_init();
-+    gtkinit = true;
++    /*
++     * GTK4 dropped gtk_disable_setlocale() and the two-argument
++     * gtk_init_check(); the guarded form is kept (with the new
++     * prototype) so a display that cannot be opened is reported by
++     * QEMU instead of terminating the process. gtk_init() would call
++     * exit(1) here, which on Android kills the whole application.
++     */
++    gtkinit = gtk_init_check();
++    if (!gtkinit) {
++        /* don't exit yet, that'll break -help */
++        return;
++    }
  
      assert(opts->type == DISPLAY_TYPE_GTK);
      if (opts->has_gl && opts->gl != DISPLAY_GL_MODE_OFF) {

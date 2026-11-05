@@ -18,6 +18,7 @@
  */
 package com.max2idea.android.limbo.main;
 
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -68,9 +69,28 @@ public class LimboGtkActivity extends ToplevelActivity {
         // with. When a VM is started a second time in the same process, a
         // finished activity would still be cached and GDK would spawn a stock
         // ToplevelActivity instead of claiming this one, so rebind every time.
-        LimboGtk.init(this);
+        //
+        // This has to happen before super.onCreate(): ToplevelActivity.onCreate()
+        // calls into GDK. Its result decides whether GTK can be used at all:
+        // without a successful gdk_android_initialize() the QEMU side has no
+        // display to open, and gtk_init() calls exit(1) on Android, which takes
+        // the whole application down (the "start hangs, screen goes black"
+        // report). Failing over to SDL is the only safe outcome.
+        boolean gdkReady = LimboGtk.init(this);
+        // Reset on success as well: ToplevelActivity.onCreate() reads this flag
+        // to decide whether its natives exist, and a previous failed attempt in
+        // the same process must not poison a later one.
+        ToplevelActivity.gdkUnavailable = !gdkReady;
+        if (!gdkReady) {
+            Log.e(TAG, "GDK android backend unavailable, falling back to the SDL display");
+        }
 
         super.onCreate(savedInstanceState);
+
+        if (!gdkReady) {
+            startSdlFallback();
+            return;
+        }
 
         Log.d(TAG, "GTK host activity created");
 
@@ -137,6 +157,27 @@ public class LimboGtkActivity extends ToplevelActivity {
         if (listener != null) {
             listener.onAction(action, value);
         }
+    }
+
+    /**
+     * GDK could not be initialised, so a GTK window can never appear in this
+     * process. Hand the job to the SDL host instead of starting a VM whose
+     * {@code gtk_init()} would call {@code exit(1)} and kill the application.
+     *
+     * <p>{@link Config#gtkInitFailed} is already set, so
+     * {@code Config.isGtkUsable()} is false and {@code VMExecutor} emits
+     * {@code -display sdl} for this (and any later) machine.
+     */
+    private void startSdlFallback() {
+        ToastUtils.toastLong(this, getString(com.limbo.emu.lib.R.string.gtk_init_failed_sdl));
+        Intent intent = new Intent(this, LimboSDLActivity.class);
+        // LimboActivity launched this host with startActivityForResult; pass the
+        // reply target on so the SDL host's result still reaches it.
+        if (getCallingActivity() != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_FORWARD_RESULT);
+        }
+        startActivity(intent);
+        finish();
     }
 
     /**

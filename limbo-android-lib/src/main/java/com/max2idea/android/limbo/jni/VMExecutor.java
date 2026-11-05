@@ -33,6 +33,7 @@ import com.max2idea.android.limbo.machine.MachineExecutor;
 import com.max2idea.android.limbo.machine.MachineProperty;
 import com.max2idea.android.limbo.main.Config;
 import com.max2idea.android.limbo.main.LimboApplication;
+import com.max2idea.android.limbo.main.LimboGtk;
 import com.max2idea.android.limbo.main.LimboSDLActivity;
 import com.max2idea.android.limbo.main.LimboSettingsManager;
 import com.max2idea.android.limbo.qmp.QmpClient;
@@ -249,7 +250,16 @@ private String getQemuLibrary() {
             // machine would silently change their start up path, and a
             // virtio-gpu-gl device needs it while nothing else benefits.
             boolean glGuest = usesGlVideoDevice();
-            if (Config.UI_GTK.equals(ui) && Config.isGtkUsable()) {
+            // Config.isGtkUsable() only says the build and the settings allow
+            // GTK; it does not prove that the GDK android backend was handed
+            // this process. When LimboGtk.init() failed, gdk_android_vm stays
+            // NULL, _gdk_android_display_open() returns NULL, and QEMU's
+            // gtk_init() then reports "Failed to open display" and exits. The
+            // patched QEMU no longer kills the process for that, but the guest
+            // would still be left without any display, so ask for SDL instead.
+            boolean gtkReady = Config.UI_GTK.equals(ui) && Config.isGtkUsable()
+                    && LimboGtk.isAvailable();
+            if (gtkReady) {
                 // GTK requires LimboGtk.init() to hand the GDK android backend
                 // this activity's Surface before the VM starts.
                 paramsList.add("-display");
