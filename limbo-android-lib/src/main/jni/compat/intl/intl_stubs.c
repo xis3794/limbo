@@ -15,6 +15,9 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 /* close_range: only in bionic API 30+; some Huawei/HarmonyOS lack it */
 int close_range(unsigned int first, unsigned int last, int flags)
@@ -39,6 +42,45 @@ void free_aligned_sized(void *ptr, size_t alignment, size_t size)
     (void)size;
     free(ptr);
 }
+
+/* copy_file_range / lchmod: bionic exports neither, but GLib's configure
+ * probes them with link-only tests and the GTK stack is linked with
+ * -Wl,-z,undefs (needed so the cross build tolerates bionic's ctype/locale
+ * gaps). The probe therefore answers "YES", GLib compiles the calls, and the
+ * undefined symbol survives into libgio-2.0.so - where the loader then
+ * refuses the library with "cannot locate symbol", killing the display stack
+ * before QEMU runs. Same failure shape as free_sized above.
+ *
+ * Both fail cleanly on the first call: GLib falls back to its portable copy
+ * loop on ENOSYS, and lchmod only ever runs for the UNIX_MODE attribute of a
+ * symlink, which is meaningless on Android.
+ *
+ * Signatures mirror bionic's (off64_t, not glibc's loff_t) so they do not
+ * conflict with the declarations newer NDK sysroots already carry. */
+#if __ANDROID_API__ < 28
+/* copy_file_range only landed in bionic at API 28; below that the symbol is
+ * genuinely absent and this definition is the only one. */
+ssize_t copy_file_range(int fd_in, off64_t *off_in,
+                        int fd_out, off64_t *off_out,
+                        size_t len, unsigned int flags)
+{
+    (void)fd_in; (void)off_in; (void)fd_out; (void)off_out;
+    (void)len; (void)flags;
+    errno = ENOSYS;
+    return -1;
+}
+#endif
+
+#if __ANDROID_API__ < 30
+/* lchmod is not in bionic at any level; the guard is against a future NDK
+ * declaring it, which would make this a duplicate definition. */
+int lchmod(const char *path, mode_t mode)
+{
+    (void)path; (void)mode;
+    errno = ENOSYS;
+    return -1;
+}
+#endif
 
 /* ------------------------------------------------------------------ */
 /* _rwlock_* internal aliases: NDK r23's libc version-binds
