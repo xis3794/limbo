@@ -49,4 +49,7 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.1.0'
 
     implementation project(':limbo-android-lib')
+
+    // Experimental Kotlin/Compose UI (opt-in via ExpPrefs.experimentalUi).
+    implementation project(':limbo-android-exp')
 }
