@@ -134,12 +134,12 @@ jobs:
           sudo cp /tmp/p018/bin/patchelf /usr/local/bin/
           patchelf --version
 
-      - name: Set up JDK 11 (for Gradle build)
-        id: jdk11
+      - name: Set up JDK 21 (for Gradle build)
+        id: jdk21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '11'
+          java-version: '21'
 
       - name: Set up JDK 17 (for sdkmanager)
         id: jdk17
@@ -148,17 +148,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK (platform 29 + build-tools 29.0.3)
+      # API 37 is only published as minor-versioned platforms, and the older
+      # cmdline-tools cannot see them, so this bump to rev 16111833 is required
+      # in addition to the package names themselves.
+      - name: Set up Android SDK (platform 37.0 + build-tools 37.0.0)
         env:
           JAVA_HOME: ${{ steps.jdk17.outputs.path }}
         run: |
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-          wget -q --timeout=60 --tries=5 --retry-connrefused --waitretry=5 https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q commandlinetools-linux-11076708_latest.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
+          wget -q --timeout=60 --tries=5 --retry-connrefused --waitretry=5 https://dl.google.com/android/repository/commandlinetools-linux-16111833_latest.zip
+          unzip -q commandlinetools-linux-16111833_latest.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
           mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-29" "build-tools;29.0.3"
+          sdkmanager "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"
 
       - name: Set up NDK r23b
         run: |
@@ -468,13 +471,15 @@ jobs:
           python3 "$GITHUB_WORKSPACE/scripts/check_resolvable_symbols.py" \
             "$OBJ" "$NDK_ROOT"
 
-      - name: Build APK with Gradle 7.0.2
+      # Gradle 9.8.0 + JDK 21 are required by AGP 9.4.1 (the AGP that supports
+      # compileSdk 37 and the AAR metadata of Compose 1.12 / Miuix 0.9.4).
+      - name: Build APK with Gradle 9.8.0
         env:
-          JAVA_HOME: ${{ steps.jdk11.outputs.path }}
+          JAVA_HOME: ${{ steps.jdk21.outputs.path }}
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-7.0.2-bin.zip
-          unzip -q gradle-7.0.2-bin.zip
-          ./gradle-7.0.2/bin/gradle :limbo-android-x86:assembleRelease --no-daemon
+          wget -q --timeout=60 --tries=5 --retry-connrefused --waitretry=5 https://services.gradle.org/distributions/gradle-9.8.0-bin.zip
+          unzip -q gradle-9.8.0-bin.zip
+          ./gradle-9.8.0/bin/gradle :limbo-android-x86:assembleRelease --no-daemon --stacktrace
 
       - name: Sign APK with debug keystore
         run: |
@@ -490,7 +495,7 @@ jobs:
           echo "Signing: $APK"
           SIGNED_APK="${APK%-unsigned.apk}-signed.apk"
           # Use apksigner from build-tools
-          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/29.0.3/apksigner"
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner"
           "$APKSIGNER" sign --ks "$KEYSTORE" --ks-pass pass:android \
             --ks-key-alias androiddebugkey --key-pass pass:android \
             --out "$SIGNED_APK" "$APK"

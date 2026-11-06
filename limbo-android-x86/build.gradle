@@ -1,24 +1,29 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 29
-    buildToolsVersion '29.0.3'
+    // The manifest no longer carries package="..."; AGP 8+ requires it here.
+    namespace 'com.limbo.emu.main'
+    // AGP 9 resolves the integer 37 to the "android-37.0" platform hash, which
+    // is the only API 37 revision the SDK ships (there is no android-37).
+    compileSdkVersion 37
+    buildToolsVersion '37.0.0'
 
     defaultConfig {
         applicationId "com.limbo.emu.main"
-        minSdkVersion 21
+        minSdkVersion 24
         targetSdkVersion 28
         ndk { abiFilters "arm64-v8a" }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // AGP 9 rejects 'proguard-android.txt' (it disables R8 optimisations).
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
             jniDebuggable true
