@@ -65,6 +65,8 @@ JNIEXPORT jstring JNICALL Java_com_max2idea_android_limbo_jni_VMExecutor_start(
 		jstring storage_dir, jstring base_dir,
 		jstring lib_filename, jstring lib_path,
 		jint sdl_scale_hint,
+		jint gtk_scale_mode,
+		jint gtk_frame_interval_ms,
 		jobjectArray params);
         
 JNIEXPORT jstring JNICALL Java_com_max2idea_android_limbo_jni_VMExecutor_stop(
