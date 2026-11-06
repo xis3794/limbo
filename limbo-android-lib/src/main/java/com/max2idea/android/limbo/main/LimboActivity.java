@@ -1248,8 +1248,7 @@ public class LimboActivity extends AppCompatActivity
                 && getIntent() != null
                 && getIntent().getStringExtra(EXTRA_MACHINE) == null
                 && com.max2idea.android.limbo.ui.exp.ExpPrefs.experimentalUi(this)) {
-            startActivity(new android.content.Intent(this,
-                    com.max2idea.android.limbo.ui.exp.LimboExperimentalActivity.class));
+            startActivity(new android.content.Intent(this, experimentalUiClass()));
             finish();
             return;
         }
@@ -1301,6 +1300,27 @@ public class LimboActivity extends AppCompatActivity
 
     private void setupAppEnvironment() {
         LimboApplication.setupEnv(this);
+    }
+
+    /**
+     * Resolves the experimental home screen without a compile-time reference.
+     *
+     * <p>The Compose/Miuix screen lives in the {@code limbo-android-exp} module,
+     * which depends on this one - not the other way round. Referencing that
+     * class literally here would invert the dependency and force every consumer
+     * of {@code limbo-android-lib} to pull in Kotlin and Compose, so the class
+     * is looked up by name instead. Forks and non-x86 builds that do not include
+     * the exp module simply get the legacy Java screen, which is the documented
+     * fallback anyway.
+     */
+    private Class<?> experimentalUiClass() {
+        try {
+            return Class.forName("com.max2idea.android.limbo.ui.exp.ExperimentalActivity");
+        } catch (ClassNotFoundException e) {
+            Log.d("LimboActivity",
+                    "Compose experimental UI is not part of this build, using the Java one");
+            return com.max2idea.android.limbo.ui.exp.LimboExperimentalActivity.class;
+        }
     }
 
     private void setupController() {
