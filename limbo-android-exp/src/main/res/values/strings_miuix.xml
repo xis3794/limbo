@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Strings for the experimental Compose/Miuix UI.
+
+    Deliberately kept in this module (not in :limbo-android-lib) so the library
+    module's res/values/strings.xml file stays untouched — that file is owned by
+    the GTK work happening in parallel.
+-->
+<resources>
+    <string name="exp_miuix_title">虚拟机</string>
+    <string name="exp_miuix_all_machines">全部虚拟机</string>
+
+    <string name="exp_miuix_count_machines">虚拟机</string>
+    <string name="exp_miuix_count_running">运行中</string>
+
+    <string name="exp_miuix_status_running">正在运行</string>
+    <string name="exp_miuix_status_idle">没有运行中的虚拟机</string>
+    <string name="exp_miuix_status_idle_summary">从下方选择一台机器启动</string>
+
+    <string name="exp_miuix_badge_running">运行中</string>
+    <string name="exp_miuix_unnamed">未命名</string>
+    <string name="exp_miuix_unknown_arch">未知架构</string>
+    <string name="exp_miuix_empty">还没有虚拟机</string>
+    <string name="exp_miuix_empty_action">新建虚拟机</string>
+
+    <string name="exp_miuix_tab_new">新建</string>
+    <string name="exp_miuix_tab_settings">设置</string>
+
+    <!-- %1$s = arch, %2$d = cpu count, %3$d = memory in MB -->
+    <string name="exp_miuix_machine_meta">%1$s · %2$d 核 · %3$d MB</string>
+</resources>

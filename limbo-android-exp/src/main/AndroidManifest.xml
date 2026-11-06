@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+            Registered here rather than in :limbo-android-lib so the library
+            module keeps zero Kotlin/Compose dependency. The manifest merger
+            folds this into the application module.
+
+            android:exported="false" and no launcher intent-filter mean nothing
+            reaches this activity unless the app explicitly starts it, which
+            only happens behind ExpPrefs.experimentalUi(context).
+        -->
+        <activity
+            android:name="com.max2idea.android.limbo.ui.exp.ExperimentalActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/Theme.MaterialComponents.NoActionBar" />
+    </application>
+
+</manifest>

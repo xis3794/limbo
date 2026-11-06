@@ -1,0 +1,14 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+include(":limbo-android-lib")
+include(":limbo-android-x86")
+include(":limbo-android-arm")
+include(":limbo-android-sparc")
+include(":limbo-android-ppc")
+include(":limbo-android-exp")
