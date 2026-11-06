@@ -80,6 +80,38 @@ public class LimboSettingsManager extends PreferenceActivity {
         return prefs.getBoolean("ShowFullscreen", true);
     }
 
+    /**
+     * How the GTK display maps the guest frame onto the screen, see
+     * {@link Config#GTKScaleMode}. Stored as a string so an out of range value
+     * can never turn into a bad QEMU argument.
+     */
+    public static int getGtkScaleMode(Context context) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        String raw = prefs.getString("gtkScaleMode", null);
+        if (raw == null) {
+            return Config.GTK_SCALE_FIT;
+        }
+        try {
+            int mode = Integer.parseInt(raw);
+            if (mode < Config.GTK_SCALE_STRETCH || mode > Config.GTK_SCALE_FIT_WIDTH) {
+                return Config.GTK_SCALE_FIT;
+            }
+            return mode;
+        } catch (NumberFormatException e) {
+            return Config.GTK_SCALE_FIT;
+        }
+    }
+
+    public static void setGtkScaleMode(Context context, int mode) {
+        if (mode < Config.GTK_SCALE_STRETCH || mode > Config.GTK_SCALE_FIT_WIDTH) {
+            mode = Config.GTK_SCALE_FIT;
+        }
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        SharedPreferences.Editor edit = prefs.edit();
+        edit.putString("gtkScaleMode", String.valueOf(mode));
+        edit.commit();
+    }
+
     // updates
     public static boolean getPromptUpdateVersion(Context context) {
         if(!Config.enableSoftwareUpdates)

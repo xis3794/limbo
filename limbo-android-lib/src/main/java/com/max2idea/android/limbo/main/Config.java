@@ -214,6 +214,56 @@ public class Config {
 
     //XXX set scaling to linear it's a tad slower but it's worth it
     public static int SDLHintScale = 1;
+
+    /**
+     * How the GTK display maps the guest framebuffer onto the phone screen.
+     *
+     * <p>Handed to QEMU as {@code limbo_gtk_scale_mode} (see
+     * {@code gd_update_scale()} in the GTK4 patch) so that both the cairo and
+     * the GL drawing paths share one policy:
+     * <ul>
+     *   <li>0 - stretch: fill the whole surface, ignoring the aspect ratio
+     *       (no black bars, but circles become ellipses);</li>
+     *   <li>1 - fit: keep the aspect ratio and letterbox, the default;</li>
+     *   <li>2 - 1:1: show the guest at its native pixel size, centred, which
+     *       is the only mode where the guest's pixels stay perfectly sharp;</li>
+     *   <li>3 - fit width: scale so the width fills the screen and crop the
+     *       vertical overflow, which removes the bars on a wide guest while
+     *       keeping the aspect ratio.</li>
+     * </ul>
+     * Persisted in the settings screen; changing it takes effect on the next
+     * VM start.
+     */
+    public static int GTKScaleMode = 1;
+    public static final int GTK_SCALE_STRETCH = 0;
+    public static final int GTK_SCALE_FIT = 1;
+    public static final int GTK_SCALE_ONE_TO_ONE = 2;
+    public static final int GTK_SCALE_FIT_WIDTH = 3;
+
+    /** Human readable labels for {@link #GTKScaleMode}, index == mode. */
+    public static final String[] GTK_SCALE_MODE_LABELS = {
+            "Stretch to fill", "Fit screen (keep ratio)", "1:1 (no scaling)",
+            "Fill width, crop height"
+    };
+    /**
+     * Frame interval in milliseconds handed to QEMU's
+     * {@code gui_refresh_interval_default} for the GTK display, or 0 to keep
+     * the built-in default.
+     *
+     * <p>The Android GDK backend never reports a monitor refresh rate, so
+     * {@code gd_update_monitor_refresh_rate()} in {@code ui/gtk.c} always
+     * falls back to {@code GUI_REFRESH_INTERVAL_DEFAULT} (30 ms, about 33
+     * fps) and never reaches the idle interval either. On the GtkGLArea path
+     * a frame is only a composited texture, so a 60 Hz cadence is cheap and
+     * removes the sluggishness next to the SDL and VNC screens. The software
+     * cairo path keeps 0: it re-samples the whole framebuffer on the CPU, and
+     * more frames only make it hotter, not smoother.
+     *
+     * <p>Computed by {@code VMExecutor#addDisplayOptions} every time a VM is
+     * started, it is not a user setting.
+     */
+    public static int GTKFrameIntervalMs = 0;
+
     public static boolean viewLogInternally = true;
     //XXX some archs don't support floppy or sd card
     public static boolean enableEmulatedFloppy = true;

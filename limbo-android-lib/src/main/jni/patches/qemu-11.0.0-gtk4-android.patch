@@ -409,7 +409,7 @@ diff --git a/ui/gtk-egl.c b/ui/gtk-egl.c
 index fa8fe89..38c5d08 100644
 --- a/ui/gtk-egl.c
 +++ b/ui/gtk-egl.c
-@@ -24,6 +24,14 @@
+@@ -24,6 +24,15 @@
  
  #include "system/system.h"
  
@@ -417,14 +417,15 @@ index fa8fe89..38c5d08 100644
 +/* Injected by vm-executor-jni.c at VM start via set_qemu_var().
 + *   0 = stretch to fill the screen (ignore aspect ratio)
 + *   1 = keep the guest aspect ratio (letterbox, default)
-+ *   2 = 1:1 pixel mapping (native guest resolution, centered) */
++ *   2 = 1:1 pixel mapping (native guest resolution, centered)
++ *   3 = fill the width, crop the overflow above and below */
 +extern int limbo_gtk_scale_mode;
 +#endif
 +
  static void gtk_egl_set_scanout_mode(VirtualConsole *vc, bool scanout)
  {
      if (vc->gfx.scanout_mode == scanout) {
-@@ -115,8 +123,42 @@ void gd_egl_draw(VirtualConsole *vc)
+@@ -115,8 +123,49 @@ void gd_egl_draw(VirtualConsole *vc)
          eglMakeCurrent(qemu_egl_display, vc->gfx.esurface,
                         vc->gfx.esurface, vc->gfx.ectx);
  
@@ -450,6 +451,13 @@ index fa8fe89..38c5d08 100644
 +                int vy = (ph - fbh) / 2;
 +                glViewport(MAX(vx, 0), MAX(vy, 0),
 +                           MIN(fbw, pw), MIN(fbh, ph));
++                break;
++            }
++            case 3: { /* fill width, crop the height overflow */
++                int fbw = surface_width(vc->gfx.ds);
++                int fbh = surface_height(vc->gfx.ds);
++                int vh = fbw > 0 ? (int)((double)fbh * pw / fbw) : ph;
++                glViewport(0, (ph - vh) / 2, pw, vh);
 +                break;
 +            }
 +            case 1: /* aspect */
@@ -513,7 +521,7 @@ diff --git a/ui/gtk-gl-area.c b/ui/gtk-gl-area.c
 index ce49000..162689c 100644
 --- a/ui/gtk-gl-area.c
 +++ b/ui/gtk-gl-area.c
-@@ -18,6 +18,14 @@
+@@ -18,6 +18,15 @@
  
  #include "system/system.h"
  
@@ -521,7 +529,8 @@ index ce49000..162689c 100644
 +/* Injected by vm-executor-jni.c at VM start via set_qemu_var().
 + *   0 = stretch to fill the screen (ignore aspect ratio)
 + *   1 = keep the guest aspect ratio (letterbox, default)
-+ *   2 = 1:1 pixel mapping (native guest resolution, centered) */
++ *   2 = 1:1 pixel mapping (native guest resolution, centered)
++ *   3 = fill the width, crop the overflow above and below */
 +extern int limbo_gtk_scale_mode;
 +#endif
 +
@@ -543,7 +552,7 @@ index ce49000..162689c 100644
      pw = ww * gs;
      ph = wh * gs;
  
-@@ -137,8 +145,42 @@ void gd_gl_area_draw(VirtualConsole *vc)
+@@ -137,8 +145,49 @@ void gd_gl_area_draw(VirtualConsole *vc)
      } else {
          gtk_gl_area_make_current(GTK_GL_AREA(vc->gfx.drawing_area));
  
@@ -569,6 +578,13 @@ index ce49000..162689c 100644
 +                int vy = (ph - fbh) / 2;
 +                glViewport(MAX(vx, 0), MAX(vy, 0),
 +                           MIN(fbw, pw), MIN(fbh, ph));
++                break;
++            }
++            case 3: { /* fill width, crop the height overflow */
++                int fbw = surface_width(vc->gfx.ds);
++                int fbh = surface_height(vc->gfx.ds);
++                int vh = fbw > 0 ? (int)((double)fbh * pw / fbw) : ph;
++                glViewport(0, (ph - vh) / 2, pw, vh);
 +                break;
 +            }
 +            case 1: /* aspect */
@@ -713,7 +729,7 @@ index 9ebe7e8..a3c009d 100644
  
  struct VCChardev {
      Chardev parent;
-@@ -141,60 +109,56 @@ static void gd_ungrab_pointer(GtkDisplayState *s);
+@@ -141,60 +109,57 @@ static void gd_ungrab_pointer(GtkDisplayState *s);
  static void gd_grab_keyboard(VirtualConsole *vc, const char *reason);
  static void gd_ungrab_keyboard(GtkDisplayState *s);
  
@@ -730,6 +746,7 @@ index 9ebe7e8..a3c009d 100644
 +static void gd_menu_switch_vc(GtkDisplayState *s, int idx);
 +static void gd_menu_untabify(GtkDisplayState *s);
 +static void gd_button_press(VirtualConsole *vc, double x, double y, bool down);
++static void gd_pointer_move(VirtualConsole *vc, double x, double y);
 +static void gd_connect_window_hotkeys(GtkWidget *window,
 +                                      GtkDisplayState *s,
 +                                      VirtualConsole *vc);
@@ -845,7 +862,7 @@ index 9ebe7e8..a3c009d 100644
  
      if (vc->type == GD_VC_GFX) {
          if (!vc->gfx.ds) {
-@@ -275,53 +239,21 @@ static void gd_update_geometry_hints(VirtualConsole *vc)
+@@ -275,53 +239,34 @@ static void gd_update_geometry_hints(VirtualConsole *vc)
          }
          double scale_x = s->free_scale ? VC_SCALE_MIN : vc->gfx.scale_x;
          double scale_y = s->free_scale ? VC_SCALE_MIN : vc->gfx.scale_y;
@@ -857,6 +874,19 @@ index 9ebe7e8..a3c009d 100644
 +        int min_width  = surface_width(vc->gfx.ds) * scale_x;
 +        int min_height = surface_height(vc->gfx.ds) * scale_y;
 +
++#ifdef __LIMBO__
++        /*
++         * Android: the GTK window always covers the whole screen, so the
++         * drawing area has to follow the window and not the guest
++         * framebuffer.  A minimum size derived from the guest resolution
++         * makes the area larger than the display for any guest above the
++         * device resolution (1920x1080 gives 480 logical px even at
++         * VC_SCALE_MIN), and the surplus is simply clipped, which shifts
++         * the picture and looks like a scaling bug.  Drop the minimum.
++         */
++        min_width = -1;
++        min_height = -1;
++#endif
 +        gtk_widget_set_size_request(vc->gfx.drawing_area, min_width, min_height);
  
  #if defined(CONFIG_VTE)
@@ -966,25 +996,25 @@ index 9ebe7e8..a3c009d 100644
  }
  
  /** DisplayState Callbacks **/
-@@ -387,8 +310,6 @@ static void gd_update(DisplayChangeListener *dcl,
+@@ -387,8 +310,7 @@ static void gd_update(DisplayChangeListener *dcl,
                        int fbx, int fby, int fbw, int fbh)
  {
      VirtualConsole *vc = container_of(dcl, VirtualConsole, gfx.dcl);
 -    GdkWindow *win;
--    int wx1, wx2, wy1, wy2;
+     int wx1, wx2, wy1, wy2;
      int wx_offset, wy_offset;
      int ww_surface, wh_surface;
      int ww_widget, wh_widget;
-@@ -405,21 +326,14 @@ static void gd_update(DisplayChangeListener *dcl,
+@@ -405,21 +326,20 @@ static void gd_update(DisplayChangeListener *dcl,
                                 fbx, fby, 0, 0, fbx, fby, fbw, fbh);
      }
  
--    wx1 = floor(fbx * vc->gfx.scale_x);
--    wy1 = floor(fby * vc->gfx.scale_y);
--
--    wx2 = ceil(fbx * vc->gfx.scale_x + fbw * vc->gfx.scale_x);
--    wy2 = ceil(fby * vc->gfx.scale_y + fbh * vc->gfx.scale_y);
--
+     wx1 = floor(fbx * vc->gfx.scale_x);
+     wy1 = floor(fby * vc->gfx.scale_y);
+ 
+     wx2 = ceil(fbx * vc->gfx.scale_x + fbw * vc->gfx.scale_x);
+     wy2 = ceil(fby * vc->gfx.scale_y + fbh * vc->gfx.scale_y);
+ 
      ww_surface = surface_width(vc->gfx.ds) * vc->gfx.scale_x;
      wh_surface = surface_height(vc->gfx.ds) * vc->gfx.scale_y;
  
@@ -1000,17 +1030,6 @@ index 9ebe7e8..a3c009d 100644
  
      wx_offset = wy_offset = 0;
      if (ww_widget > ww_surface) {
-@@ -429,9 +343,7 @@ static void gd_update(DisplayChangeListener *dcl,
-         wy_offset = (wh_widget - wh_surface) / 2;
-     }
- 
--    gtk_widget_queue_draw_area(vc->gfx.drawing_area,
--                               wx_offset + wx1, wy_offset + wy1,
--                               (wx2 - wx1), (wy2 - wy1));
-+    gtk_widget_queue_draw(vc->gfx.drawing_area);
- }
- 
- static void gd_refresh(DisplayChangeListener *dcl)
 @@ -439,29 +351,21 @@ static void gd_refresh(DisplayChangeListener *dcl)
      graphic_hw_update(dcl->con);
  }
@@ -1133,7 +1152,7 @@ index 9ebe7e8..a3c009d 100644
          refresh_rate = gdk_monitor_get_refresh_rate(monitor); /* [mHz] */
      } else {
          refresh_rate = 0;
-@@ -808,97 +715,62 @@ void gd_update_monitor_refresh_rate(VirtualConsole *vc, GtkWidget *widget)
+@@ -808,97 +715,66 @@ void gd_update_monitor_refresh_rate(VirtualConsole *vc, GtkWidget *widget)
      vc->gfx.dcl.update_interval = refresh_rate ?
          MIN(1000 * 1000 / refresh_rate, GUI_REFRESH_INTERVAL_DEFAULT) :
          GUI_REFRESH_INTERVAL_DEFAULT;
@@ -1146,6 +1165,7 @@ index 9ebe7e8..a3c009d 100644
 + *   0 = stretch to fill the screen (ignore aspect ratio)
 + *   1 = keep the guest aspect ratio (letterbox, default)
 + *   2 = 1:1 pixel mapping (native guest resolution, centered)
++ *   3 = fill the width, crop the overflow above and below
 + * Injected at VM start by vm-executor-jni.c via set_qemu_var(), so this
 + * global must stay a dlsym-visible non-static symbol.
 + */
@@ -1181,6 +1201,9 @@ index 9ebe7e8..a3c009d 100644
 +    case 2: /* 1:1: keep the native guest pixels, centered */
 +        vc->gfx.scale_x = 1.0;
 +        vc->gfx.scale_y = 1.0;
++        break;
++    case 3: /* fill width: uniform scale, crop the height overflow */
++        vc->gfx.scale_x = vc->gfx.scale_y = sx;
 +        break;
 +    case 1: /* aspect (default): uniform scale with letterboxing */
 +    default:
@@ -1344,7 +1367,7 @@ index 9ebe7e8..a3c009d 100644
  {
      VirtualConsole *vc = opaque;
      GtkDisplayState *s = vc->s;
-@@ -982,22 +858,22 @@ static gboolean gd_motion_event(GtkWidget *widget, GdkEventMotion *motion,
+@@ -982,22 +858,27 @@ static gboolean gd_motion_event(GtkWidget *widget, GdkEventMotion *motion,
      int wx_offset, wy_offset;
      int wh_surface, ww_surface;
      int ww_widget, wh_widget;
@@ -1355,8 +1378,13 @@ index 9ebe7e8..a3c009d 100644
 +        return;
 +    }
 +
-+    /* active touch drags are routed to the touch handling code */
++    /*
++     * An active finger drag becomes a pointer drag for guests that have an
++     * absolute pointing device - that is what the SDL and VNC screens do on
++     * the same framebuffer - and keeps feeding multi-touch slots otherwise.
++     */
 +    if (vc->gfx.touch_active) {
++        gd_pointer_move(vc, x, y);
 +        return;
      }
  
@@ -1400,7 +1428,7 @@ index 9ebe7e8..a3c009d 100644
          }
          qemu_input_queue_abs(vc->gfx.dcl.con, INPUT_AXIS_X, fbx,
                               0, surface_width(vc->gfx.ds));
-@@ -1035,85 +907,168 @@ static gboolean gd_motion_event(GtkWidget *widget, GdkEventMotion *motion,
+@@ -1035,85 +907,229 @@ static gboolean gd_motion_event(GtkWidget *widget, GdkEventMotion *motion,
      s->last_x = fbx;
      s->last_y = fby;
      s->last_set = TRUE;
@@ -1488,17 +1516,24 @@ index 9ebe7e8..a3c009d 100644
 +    GdkDevice *device;
 +    GdkInputSource source;
 +
-+    if (n_press > 1) {
-+        /* ignore double/triple clicks */
-+        return;
-+    }
-+
 +    device = gtk_gesture_get_device(GTK_GESTURE(gesture));
 +    source = device ? gdk_device_get_source(device) : GDK_SOURCE_MOUSE;
 +
 +    if (source == GDK_SOURCE_TOUCHSCREEN) {
 +        vc->gfx.touch_active = true;
-+        gd_touch_handle(vc, INPUT_MULTI_TOUCH_TYPE_BEGIN, x, y);
++        if (qemu_input_is_absolute(vc->gfx.dcl.con)) {
++            /*
++             * Android: a finger tap has to behave exactly like it does on
++             * the SDL and VNC screens, where touching the framebuffer puts
++             * the pointer there and clicks.  Synthetic multi-touch slots
++             * only help guests that have a real touch device, so use the
++             * absolute pointer whenever the guest has one (usb-tablet,
++             * virtio-tablet, ...).
++             */
++            gd_button_press(vc, x, y, true);
++        } else {
++            gd_touch_handle(vc, INPUT_MULTI_TOUCH_TYPE_BEGIN, x, y);
++        }
 +        return;
 +    }
  
@@ -1548,16 +1583,70 @@ index 9ebe7e8..a3c009d 100644
 +
 +    if (source == GDK_SOURCE_TOUCHSCREEN) {
 +        vc->gfx.touch_active = false;
-+        gd_touch_handle(vc, INPUT_MULTI_TOUCH_TYPE_END, x, y);
++        if (qemu_input_is_absolute(vc->gfx.dcl.con)) {
++            gd_button_press(vc, x, y, false);
++        } else {
++            gd_touch_handle(vc, INPUT_MULTI_TOUCH_TYPE_END, x, y);
++        }
 +        return;
      }
  
 -    if (button->type == GDK_2BUTTON_PRESS || button->type == GDK_3BUTTON_PRESS) {
 -        return TRUE;
-+    if (n_press > 1) {
++    gd_button_press(vc, x, y, false);
++}
++
++/*
++ * Queue an absolute pointer position, mapping widget coordinates back into
++ * the guest framebuffer.  Used for finger drags once the guest has an
++ * absolute pointing device, so that dragging behaves like it does on the
++ * SDL and VNC screens instead of being dropped.
++ */
++static void gd_pointer_move(VirtualConsole *vc, double x, double y)
++{
++    GtkWidget *widget = vc->gfx.drawing_area;
++    int fbx, fby;
++    int wx_offset, wy_offset;
++    int ww_surface, wh_surface;
++    int ww_widget, wh_widget;
++
++    if (!vc->gfx.ds || !vc->gfx.dcl.con) {
 +        return;
 +    }
-+    gd_button_press(vc, x, y, false);
++    if (!qemu_input_is_absolute(vc->gfx.dcl.con)) {
++        return;
++    }
++    if (vc->gfx.scale_x <= 0 || vc->gfx.scale_y <= 0) {
++        return;
++    }
++
++    ww_surface = surface_width(vc->gfx.ds) * vc->gfx.scale_x;
++    wh_surface = surface_height(vc->gfx.ds) * vc->gfx.scale_y;
++    ww_widget = gtk_widget_get_width(widget);
++    wh_widget = gtk_widget_get_height(widget);
++
++    wx_offset = wy_offset = 0;
++    if (ww_widget > ww_surface) {
++        wx_offset = (ww_widget - ww_surface) / 2;
++    }
++    if (wh_widget > wh_surface) {
++        wy_offset = (wh_widget - wh_surface) / 2;
++    }
++
++    fbx = (x - wx_offset) / vc->gfx.scale_x;
++    fby = (y - wy_offset) / vc->gfx.scale_y;
++
++    if (fbx < 0 || fby < 0 ||
++        fbx >= surface_width(vc->gfx.ds) ||
++        fby >= surface_height(vc->gfx.ds)) {
++        return;
++    }
++
++    qemu_input_queue_abs(vc->gfx.dcl.con, INPUT_AXIS_X, fbx,
++                         0, surface_width(vc->gfx.ds));
++    qemu_input_queue_abs(vc->gfx.dcl.con, INPUT_AXIS_Y, fby,
++                         0, surface_height(vc->gfx.ds));
++    qemu_input_event_sync();
 +}
 +
 +static void gd_button_press(VirtualConsole *vc, double x, double y, bool down)
@@ -3271,7 +3360,7 @@ index 9ebe7e8..a3c009d 100644
      }
  #ifdef CONFIG_GTK_CLIPBOARD
      gd_clipboard_init(s);
-@@ -2611,29 +2457,23 @@ static void gtk_display_init(DisplayState *ds, DisplayOptions *opts)
+@@ -2611,31 +2457,38 @@ static void gtk_display_init(DisplayState *ds, DisplayOptions *opts)
  
  static void early_gtk_display_init(DisplayOptions *opts)
  {
@@ -3317,6 +3406,21 @@ index 9ebe7e8..a3c009d 100644
  
      assert(opts->type == DISPLAY_TYPE_GTK);
      if (opts->has_gl && opts->gl != DISPLAY_GL_MODE_OFF) {
+ #if defined(CONFIG_OPENGL)
++#ifdef GDK_WINDOWING_ANDROID
++        /*
++         * The Android GDK backend is a full EGL implementation, but the
++         * QEMU GTK backend only enables GtkGLArea from the Wayland and
++         * Win32 branches below.  Without this branch the Android build
++         * always falls back to a cairo drawing area, which re-samples the
++         * whole guest framebuffer on the CPU for every single frame.
++         */
++        if (GDK_IS_ANDROID_DISPLAY(gdk_display_get_default())) {
++            gtk_use_gl_area = true;
++            gtk_gl_area_init();
++        } else
++#endif
+ #if defined(GDK_WINDOWING_WAYLAND)
 diff --git a/ui/meson.build b/ui/meson.build
 index 69404bc..07faa64 100644
 --- a/ui/meson.build

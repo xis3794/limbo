@@ -85,7 +85,9 @@ class VMExecutor extends MachineExecutor {
     //JNI Methods
     private native String start(String storage_dir, String base_dir,
                                 String lib_filename, String lib_path,
-                                int sdl_scale_hint, Object[] params);
+                                int sdl_scale_hint, int gtk_scale_mode,
+                                int gtk_frame_interval_ms,
+                                Object[] params);
 
     private native String stop(int restart);
 
@@ -244,6 +246,7 @@ private String getQemuLibrary() {
             // changes what QEMU does. The plain SDL case keeps the previous
             // command line byte for byte, which is the safest option given
             // that SDL is the default backend for every existing machine.
+            Config.GTKFrameIntervalMs = 0;
             String ui = Config.normalizeUI(getMachine().getUI());
             // ",gl=on" is only requested when the guest actually uses a GL
             // capable video device. Turning it on for every existing SDL
@@ -262,8 +265,31 @@ private String getQemuLibrary() {
             if (gtkReady) {
                 // GTK requires LimboGtk.init() to hand the GDK android backend
                 // this activity's Surface before the VM starts.
+                //
+                // The extra options exist because the GTK window on Android is
+                // a fullscreen Surface, not a desktop window:
+                //  * window-close=on: without it, gd_window_close() (ui/gtk.c)
+                //    refuses to call qmp_quit(), so the back button and the
+                //    close request do nothing and the guest cannot be stopped
+                //    from the display at all.
+                //  * show-menubar=off: the GTK menubar (File/View/Machine...)
+                //    is a desktop affordance; on a phone it eats the top of the
+                //    screen and offers no usable input.
+                //  * grab-on-hover=off: pointer grabbing needs a hardware
+                //    mouse and a window manager.
+                StringBuilder display = new StringBuilder("gtk");
+                if (glGuest && Config.isVirglUsable()) {
+                    display.append(",gl=on");
+                }
+                display.append(",window-close=on,show-menubar=off,grab-on-hover=off");
                 paramsList.add("-display");
-                paramsList.add(glGuest && Config.isVirglUsable() ? "gtk,gl=on" : "gtk");
+                paramsList.add(display.toString());
+                // A composited GL frame is cheap, so ask for a 60 Hz cadence.
+                // The software cairo path keeps the conservative default: it
+                // re-samples the whole guest framebuffer on the CPU, and
+                // pushing that to 60 fps only makes it hotter, not smoother.
+                Config.GTKFrameIntervalMs =
+                        (glGuest && Config.isVirglUsable()) ? 16 : 0;
             } else if ((glGuest && Config.isVirglUsable()) || Config.UI_GTK.equals(ui)) {
                 // Two cases need an explicit backend here:
                 //  * GPU acceleration for a GL guest: ",gl=on" cannot be
@@ -299,10 +325,25 @@ private String getQemuLibrary() {
                 mouseDevice = mouseDevice.substring(0, hintStart).trim();
             }
         }
-        if (mouseDevice != null && !mouseDevice.equals("ps2")) {
+        // GTK has no touch to pointer translation of its own: the GDK
+        // backend delivers raw touch events and QEMU feeds them to the guest
+        // as absolute or relative input depending on the emulated device.
+        // With the default "ps2" (relative) mouse a finger tap only moves the
+        // pointer and the guest never sees a click where the user touched, so
+        // the GTK screen feels completely different from SDL and VNC, which
+        // are absolute. Fall back to usb-tablet (absolute) for GTK unless the
+        // user explicitly picked another device.
+        boolean gtkLocalDisplay = !MachineController.getInstance().isVNCEnabled()
+                && Config.UI_GTK.equals(Config.normalizeUI(getMachine().getUI()))
+                && LimboGtk.isAvailable();
+        String effectiveMouse = mouseDevice;
+        if (gtkLocalDisplay && (mouseDevice == null || mouseDevice.equals("ps2"))) {
+            effectiveMouse = "usb-tablet";
+        }
+        if (effectiveMouse != null && !effectiveMouse.equals("ps2")) {
             paramsList.add("-usb");
             paramsList.add("-device");
-            paramsList.add(mouseDevice);
+            paramsList.add(effectiveMouse);
         }
 
         // Boot firmware: when an EFI image is selected (Limbo Plus style),
@@ -1209,7 +1250,8 @@ private String getQemuLibrary() {
             }
             res = start(Config.storagedir, LimboApplication.getBasefileDir(),
                     libFilename, libPath,
-                    Config.SDLHintScale, params);
+                    Config.SDLHintScale, Config.GTKScaleMode,
+                    Config.GTKFrameIntervalMs, params);
         } catch (Exception ex) {
             ToastUtils.toastLong(LimboApplication.getInstance(), ex.getMessage());
             return res;

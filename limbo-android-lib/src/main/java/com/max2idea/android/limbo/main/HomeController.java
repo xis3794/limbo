@@ -293,7 +293,7 @@ public class HomeController implements
                     // everything else keeps the historical SDL one.
                     String ui = Config.normalizeUI(
                             MachineController.getInstance().getMachine().getUI());
-                    Class<?> target = Config.UI_GTK.equals(ui) && Config.isGtkUsable()
+                    Class<?> target = Config.UI_GTK.equals(ui) && LimboGtkActivity.isUsable()
                             ? LimboGtkActivity.class : LimboSDLActivity.class;
                     activity.startActivity(new Intent(activity, target));
                 }

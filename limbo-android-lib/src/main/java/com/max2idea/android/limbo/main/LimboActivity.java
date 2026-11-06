@@ -2204,7 +2204,7 @@ public class LimboActivity extends AppCompatActivity
      */
     private Class<?> localDisplayActivityClass() {
         String ui = Config.normalizeUI(getMachine().getUI());
-        if (Config.UI_GTK.equals(ui) && Config.isGtkUsable()) {
+        if (Config.UI_GTK.equals(ui) && LimboGtkActivity.isUsable()) {
             return LimboGtkActivity.class;
         }
         return LimboSDLActivity.class;

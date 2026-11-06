@@ -56,6 +56,9 @@ public class LimboGtkActivity extends ToplevelActivity {
     /** Called from the home dashboard before launching this host to stop a VM. */
     private static boolean sPendingStopFromHome;
 
+    /** Whether {@link LimboGtk#init} bound GDK to this activity in this instance. */
+    private boolean gdkReady;
+
     /** Arms a shutdown for the next {@link #onCreate} of this host. */
     public static void requestStopOnNextOpen() {
         sPendingStopFromHome = true;
@@ -77,6 +80,10 @@ public class LimboGtkActivity extends ToplevelActivity {
         // the whole application down (the "start hangs, screen goes black"
         // report). Failing over to SDL is the only safe outcome.
         boolean gdkReady = LimboGtk.init(this);
+        // The field is what onBackPressed() reads: after a failed init the
+        // activity delegates to the superclass so Android's own back handling
+        // finishes it normally.
+        this.gdkReady = gdkReady;
         // Reset on success as well: ToplevelActivity.onCreate() reads this flag
         // to decide whether its natives exist, and a previous failed attempt in
         // the same process must not poison a later one.
@@ -90,6 +97,21 @@ public class LimboGtkActivity extends ToplevelActivity {
         if (!gdkReady) {
             startSdlFallback();
             return;
+        }
+
+        // Sustained performance mode asks the platform not to throttle the CPU
+        // and GPU while a long-running foreground workload is on screen. The
+        // SDL host requests it too (LimboSDLActivity#setupScreen); without it
+        // Android drops clocks after a few minutes and the guest slows down
+        // exactly the way it was reported ("the VM suddenly becomes very
+        // slow"). GTK renders the whole guest framebuffer through the same
+        // surface, so it needs the same hint.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            android.os.PowerManager pm = (android.os.PowerManager)
+                    getApplicationContext().getSystemService(android.content.Context.POWER_SERVICE);
+            if (pm != null && pm.isSustainedPerformanceModeSupported()) {
+                getWindow().setSustainedPerformanceMode(true);
+            }
         }
 
         Log.d(TAG, "GTK host activity created");
@@ -201,6 +223,33 @@ public class LimboGtkActivity extends ToplevelActivity {
                         }
                     }
                 }, 12000);
+    }
+
+    /**
+     * Leave the GTK screen.
+     *
+     * <p>{@link ToplevelActivity#onBackPressed()} only forwards the press to GDK,
+     * which turns it into a {@code close-request} on the GTK window. QEMU answers
+     * that with {@code qmp_quit()}, so a back press would shut the guest down and
+     * - when the option is missing - do nothing at all. Either way the user stays
+     * stuck on the GTK screen, which is the reported "GTK cannot be exited".
+     *
+     * <p>The SDL host's back press does not stop the VM either, it just returns to
+     * the application ({@code LimboSDLActivity#onBackPressed}). This mirrors that:
+     * back finishes the display activity, the guest keeps running, and the running
+     * machine can be re-entered from the dashboard status card.
+     */
+    @Override
+    public void onBackPressed() {
+        if (!gdkReady) {
+            super.onBackPressed();
+            return;
+        }
+        if (MachineController.getInstance().isRunning()) {
+            ToastUtils.toastShort(this,
+                    getString(com.limbo.emu.lib.R.string.gtk_back_leaves_running));
+        }
+        finish();
     }
 
     @Override

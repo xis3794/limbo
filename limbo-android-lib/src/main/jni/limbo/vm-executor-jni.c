@@ -163,6 +163,8 @@ JNIEXPORT jstring JNICALL Java_com_max2idea_android_limbo_jni_VMExecutor_start(
 		jstring storage_dir, jstring base_dir,
 		jstring lib_filename, jstring lib_path,
 		jint sdl_scale_hint,
+		jint gtk_scale_mode,
+		jint gtk_frame_interval_ms,
 		jobjectArray params) {
 	int res;
 	char res_msg[MSG_BUFSIZE + 1] = { 0 };
@@ -240,6 +242,22 @@ JNIEXPORT jstring JNICALL Java_com_max2idea_android_limbo_jni_VMExecutor_start(
 
 	setup_jni(env, thiz, storage_dir, base_dir);
     set_qemu_var(env, thiz, "limbo_sdl_scale_hint", sdl_scale_hint);
+    // ui/gtk.c declares "int limbo_gtk_scale_mode" (see the GTK4 patch) and
+    // gd_update_scale() switches on it: 0 = stretch to fill, 1 = keep aspect
+    // ratio (letterbox), 2 = 1:1, 3 = fill width only. Without this call the
+    // global stays at its -1 default and every machine silently uses one fixed
+    // policy, which is what made the GTK window look wrong on phone screens.
+    set_qemu_var(env, thiz, "limbo_gtk_scale_mode", gtk_scale_mode);
+    // The GDK android monitor never reports a refresh rate, so QEMU keeps
+    // GUI_REFRESH_INTERVAL_DEFAULT (30 ms, about 33 fps) for the GTK window
+    // and never reaches the idle interval either.  On the GtkGLArea path a
+    // frame is only a composited texture, so a shorter interval is cheap and
+    // removes the sluggishness next to the SDL and VNC screens.  A value of 0
+    // keeps the QEMU default: the software cairo path must not be pushed
+    // above 33 fps, it re-samples the whole framebuffer on the CPU.
+    if (gtk_frame_interval_ms > 0) {
+        set_qemu_var(env, thiz, "gui_refresh_interval_default", gtk_frame_interval_ms);
+    }
 
 	typedef void (*main_t)(int argc, char **argv, char **envp);
     typedef void (*qemu_main_loop_t)();

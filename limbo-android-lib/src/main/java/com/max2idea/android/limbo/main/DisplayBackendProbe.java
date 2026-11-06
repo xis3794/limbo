@@ -76,9 +76,13 @@ public final class DisplayBackendProbe {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         Config.enableGtk = gtk && prefs.getBoolean(PREF_GTK, true);
         Config.enableVirgl = virgl && prefs.getBoolean(PREF_VIRGL, true);
+        // Scaling is read here as well so a VM start always sees the stored
+        // value even when the settings screen was never opened.
+        Config.GTKScaleMode = LimboSettingsManager.getGtkScaleMode(context);
 
         Log.d(TAG, "engine backends: gtk=" + gtk + " virgl=" + virgl
-                + " -> enabled gtk=" + Config.enableGtk + " virgl=" + Config.enableVirgl);
+                + " -> enabled gtk=" + Config.enableGtk + " virgl=" + Config.enableVirgl
+                + " gtkScaleMode=" + Config.GTKScaleMode);
     }
 
     /**

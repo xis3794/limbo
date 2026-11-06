@@ -599,6 +599,13 @@
     <string name="gtk_backend_summary">Use GTK4 windows for the guest display instead of SDL. Requires Android 11+ and a QEMU build that includes GTK.</string>
     <string name="gpu_accel">GPU acceleration (virgl)</string>
     <string name="gpu_accel_summary">Render the guest with the device GPU through virtio-gpu-gl. Requires a QEMU build with OpenGL and virglrenderer.</string>
+    <string name="gtk_scale_mode">GTK screen scaling</string>
+    <string name="gtk_scale_mode_summary">How the guest screen is fitted into the GTK window. Takes effect the next time a GTK machine starts.</string>
+    <string name="gtk_scale_stretch">Stretch to fill (ignore aspect ratio)</string>
+    <string name="gtk_scale_fit">Fit screen (keep aspect ratio)</string>
+    <string name="gtk_scale_one_to_one">1:1 (native resolution, centered)</string>
+    <string name="gtk_scale_fill_width">Fill width (crop top and bottom)</string>
     <string name="gtk_unavailable">This QEMU build has no GTK backend</string>
     <string name="gtk_init_failed_sdl">"The GTK display could not start, switching this machine to SDL"</string>
+    <string name="gtk_back_leaves_running">"The machine keeps running. Open the status card to return to the screen."</string>
 </resources>

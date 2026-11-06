@@ -196,6 +196,31 @@ public class AppSettingsActivity extends AppCompatActivity {
                         }
                     });
         }
+        // GTK scaling: the guest framebuffer is mapped onto a Surface that
+        // covers the whole screen, so the scaling mode is the only control the
+        // user has over how the guest resolution looks on the device.
+        if (Config.engineHasGtk && Build.VERSION.SDK_INT >= 31) {
+            final String[] scaleValues = res.getStringArray(R.array.gtkScaleModeValues);
+            final String[] scaleLabels = res.getStringArray(R.array.gtkScaleModeLabels);
+            final ValueRow scaleRow = addValue(display, R.drawable.ic_nav_screen,
+                    R.string.gtk_scale_mode,
+                    labelAt(scaleValues, scaleLabels, String.valueOf(Config.GTKScaleMode)));
+            scaleRow.row.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    showListDialog(R.string.gtk_scale_mode, R.array.gtkScaleModeLabels,
+                            R.array.gtkScaleModeValues, "gtkScaleMode",
+                            String.valueOf(Config.GTKScaleMode), new ValueUpdater() {
+                                @Override
+                                public void update(String value) {
+                                    scaleRow.value.setText(labelAt(scaleValues, scaleLabels, value));
+                                    Config.GTKScaleMode = LimboSettingsManager.getGtkScaleMode(
+                                            AppSettingsActivity.this);
+                                }
+                            });
+                }
+            });
+        }
         addSlider(display, R.drawable.ic_ui,
                 R.string.keyPressDelay, R.string.keyPressDelaySummary, "keyPressDelay", 100);
         addSlider(display, R.drawable.ic_machine,

@@ -445,7 +445,7 @@ public class LimboExperimentalActivity extends AppCompatActivity
         }
         if (Config.UI_VNC.equals(ui)) {
             startActivity(new Intent(this, VncActivity.class));
-        } else if (Config.UI_GTK.equals(ui) && Config.isGtkUsable()) {
+        } else if (Config.UI_GTK.equals(ui) && LimboGtkActivity.isUsable()) {
             startActivity(new Intent(this, LimboGtkActivity.class));
         } else {
             startActivity(new Intent(this, LimboSDLActivity.class));
