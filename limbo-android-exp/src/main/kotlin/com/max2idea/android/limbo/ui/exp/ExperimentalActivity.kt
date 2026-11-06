@@ -4,22 +4,22 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.max2idea.android.limbo.ui.exp.data.rememberMachineListUiState
+import com.max2idea.android.limbo.ui.exp.theme.LimboMiuixTheme
 import top.yukonga.miuix.kmp.basic.Surface
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * Entry point of the experimental Compose/Miuix UI.
  *
- * Step 3 of the migration only proves that Compose + Miuix compile and render
- * inside the app; the real HomeScreen is built in step 4.
- *
  * Guarded by the *existing* [ExpPrefs.experimentalUi] switch rather than a new
  * preference, so the app never ends up with two competing experimental toggles
  * and the default (legacy) path stays untouched.
+ *
+ * Until the settings entry point is flipped over (a later step) this activity is
+ * only reachable explicitly, and [rememberMachineListUiState] renders the
+ * placeholder rows so the static screen can be reviewed before the real machine
+ * database is wired in.
  */
 class ExperimentalActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,12 +33,9 @@ class ExperimentalActivity : ComponentActivity() {
         }
 
         setContent {
-            MiuixTheme {
+            LimboMiuixTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    Text(
-                        text = "Hello",
-                        modifier = Modifier.padding(16.dp),
-                    )
+                    HomeScreen(state = rememberMachineListUiState())
                 }
             }
         }
