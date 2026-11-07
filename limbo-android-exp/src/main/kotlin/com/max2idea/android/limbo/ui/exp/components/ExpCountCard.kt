@@ -12,10 +12,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import com.max2idea.android.limbo.ui.exp.theme.expCardColors
 
 /**
  * One half of the two-up counter row.
@@ -66,7 +66,7 @@ fun ExpCountCard(
     if (onClick != null) {
         Card(
             modifier = modifier,
-            colors = CardDefaults.defaultColors(),
+            colors = expCardColors(),
             onClick = onClick,
             insideMargin = inside,
             showIndication = true,
@@ -76,7 +76,7 @@ fun ExpCountCard(
     } else {
         Card(
             modifier = modifier,
-            colors = CardDefaults.defaultColors(),
+            colors = expCardColors(),
             insideMargin = inside,
             content = { content() },
         )

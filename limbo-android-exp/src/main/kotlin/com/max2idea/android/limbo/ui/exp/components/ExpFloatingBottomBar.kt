@@ -3,6 +3,7 @@ package com.max2idea.android.limbo.ui.exp.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.max2idea.android.limbo.ui.exp.theme.expBottomBarHairline
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -51,6 +53,13 @@ data class ExpBottomBarTab(
  *
  * * container: 64dp tall, `CircleShape`, 4dp inner padding, full width minus the
  *   12dp page margin on either side, bottom-centred;
+ * * container fill: `surfaceContainer` at **40 %**, i.e. the same glass the
+ *   NPatch `FloatingGlassBottomBar` gets from its blur stack. Because we have
+ *   no backdrop blur (§15: Miuix ships no blur/haze API and Android's
+ *   `RenderEffect` cannot sample what is *behind* a view), a 40 % fill would
+ *   dissolve the capsule into the list, so a 1dp hairline
+ *   ([expBottomBarHairline]) draws the outline that blur would otherwise
+ *   provide;
  * * tab: 56dp tall, 76dp minimum width, `weight(1f)`;
  * * selection indicator: a `primary` capsule at 15% alpha behind the tab;
  * * label: 11sp / 14sp line height, `primary` when selected,
@@ -64,13 +73,15 @@ fun ExpFloatingBottomBar(
     onSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val containerColor = MiuixTheme.colorScheme.surfaceContainer
+    val containerColor = MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.40f)
+    val hairline = expBottomBarHairline()
     Row(
         modifier = modifier
             .fillMaxWidth()
             .height(64.dp)
             .clip(CircleShape)
             .background(containerColor, CircleShape)
+            .border(width = 1.dp, color = hairline, shape = CircleShape)
             .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

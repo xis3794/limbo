@@ -368,4 +368,46 @@ public final class ExpUiBridge {
         return new android.content.Intent(context,
                 com.max2idea.android.limbo.main.AppSettingsActivity.class);
     }
+
+    // ------------------------------------------------------------------
+    // Read-only build/environment facts for the InfoCard (§30).
+    //
+    // NPatch's home screen ends with an InfoCard listing API version, NPatch
+    // version and framework version. The Limbo equivalent is the app version,
+    // the QEMU engine version and the host ABI. All three already live as
+    // static state on LimboApplication, so this is a plain wrapper -- but it
+    // still returns an empty string instead of null so the Kotlin side can
+    // render the rows without null checks.
+    // ------------------------------------------------------------------
+
+    /** Human-readable app version (the manifest {@code versionName}). */
+    public static String getAppVersionName() {
+        try {
+            String value =
+                    com.max2idea.android.limbo.main.LimboApplication.getLimboVersionString();
+            return value == null ? "" : value;
+        } catch (RuntimeException e) {
+            return "";
+        }
+    }
+
+    /** Human-readable QEMU engine version, e.g. {@code 11.0.0}. */
+    public static String getEngineVersionName() {
+        try {
+            String value =
+                    com.max2idea.android.limbo.main.LimboApplication.getQemuVersionString();
+            return value == null ? "" : value;
+        } catch (RuntimeException e) {
+            return "";
+        }
+    }
+
+    /** Primary ABI the native libraries were packaged for. */
+    public static String getHostAbi() {
+        try {
+            return android.os.Build.SUPPORTED_ABIS[0];
+        } catch (RuntimeException e) {
+            return "";
+        }
+    }
 }

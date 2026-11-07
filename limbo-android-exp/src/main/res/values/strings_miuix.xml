@@ -21,6 +21,7 @@
     <string name="exp_miuix_unnamed">未命名</string>
     <string name="exp_miuix_unknown_arch">未知架构</string>
     <string name="exp_miuix_empty">还没有虚拟机</string>
+    <string name="exp_miuix_empty_running">没有正在运行的虚拟机</string>
     <string name="exp_miuix_empty_action">新建虚拟机</string>
 
     <string name="exp_miuix_tab_new">新建</string>
@@ -41,4 +42,9 @@
 
     <!-- %1$s = arch, %2$d = cpu count, %3$d = memory in MB -->
     <string name="exp_miuix_machine_meta">%1$s · %2$d 核 · %3$d MB</string>
+
+    <!-- InfoCard rows (§30), mirroring NPatch's API/NPatch/Framework version trio -->
+    <string name="exp_miuix_info_app">Limbo 版本</string>
+    <string name="exp_miuix_info_engine">QEMU 引擎</string>
+    <string name="exp_miuix_info_abi">运行时架构</string>
 </resources>

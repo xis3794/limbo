@@ -9,7 +9,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import com.max2idea.android.limbo.ui.exp.data.rememberMachineListUiState
 import com.max2idea.android.limbo.ui.exp.theme.LimboMiuixTheme
 import top.yukonga.miuix.kmp.basic.Surface
@@ -50,7 +49,6 @@ class ExperimentalActivity : ComponentActivity() {
         setContent {
             LimboMiuixTheme {
                 val state = rememberMachineListUiState()
-                val context = LocalContext.current
                 val actions = rememberHomeActions(state)
                 val tick = resumeTick
                 LaunchedEffect(tick) {
@@ -62,8 +60,6 @@ class ExperimentalActivity : ComponentActivity() {
                     HomeScreen(
                         state = state,
                         actions = actions,
-                        onNewMachine = { context.promptNewMachine(state) },
-                        onSettings = { context.openSettings() },
                     )
                 }
             }

@@ -1,16 +1,43 @@
 package com.max2idea.android.limbo.ui.exp
 
-import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
-import android.widget.EditText
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.max2idea.android.limbo.main.AppSettingsActivity
 import com.max2idea.android.limbo.ui.exp.bridge.ExpUiBridge
 import com.max2idea.android.limbo.ui.exp.data.MachineListUiState
+
+/**
+ * Dialog state for the home screen.
+ *
+ * §32/§33 of the gap list replaced the two `android.app.AlertDialog`s with
+ * dialogs drawn from the page's own primitives. Compose dialogs have to be
+ * declared inside the composition, so the old "build an AlertDialog in a
+ * Context extension and call `show()`" shape no longer works: the actions now
+ * only flip a field in this holder and [HomeScreen] renders the matching
+ * dialog from it.
+ */
+@Stable
+class HomeDialogsState {
+    /** Name of the machine awaiting a delete confirmation, or null. */
+    var pendingDelete: String? by mutableStateOf(null)
+
+    /** Whether the "new machine" prompt is showing. */
+    var newPromptVisible: Boolean by mutableStateOf(false)
+
+    /** What the user has typed into the new-machine prompt. */
+    var newName: String by mutableStateOf("")
+
+    /** Inline validation message for the prompt, or null when the input is fine. */
+    var newNameError: String? by mutableStateOf(null)
+}
 
 /**
  * Wires the pure [HomeScreen] to the legacy Java side.
@@ -28,6 +55,7 @@ import com.max2idea.android.limbo.ui.exp.data.MachineListUiState
 fun rememberHomeActions(state: MachineListUiState): HomeActions {
     val context = LocalContext.current
     return remember(state, context) {
+        val dialogs = HomeDialogsState()
         HomeActions(
             onStatusCardClick = {
                 if (state.isRunning) {
@@ -37,7 +65,28 @@ fun rememberHomeActions(state: MachineListUiState): HomeActions {
                 }
             },
             onMachineClick = { name -> context.openMachine(state, name) },
-            onMachineLongClick = { name -> context.confirmDelete(state, name) },
+            onMachineLongClick = { name -> context.askDelete(state, dialogs, name) },
+            dialogs = dialogs,
+            onNewMachine = { context.showNewPrompt(dialogs) },
+            onSettings = { context.openSettings() },
+            onDeleteConfirm = {
+                val name = dialogs.pendingDelete
+                dialogs.pendingDelete = null
+                if (name != null && !context.applyDelete(state, name)) {
+                    toast(context, context.getString(R.string.exp_miuix_stop_first))
+                }
+            },
+            onDeleteDismiss = { dialogs.pendingDelete = null },
+            onNewNameChange = { value ->
+                dialogs.newName = value
+                dialogs.newNameError = null
+            },
+            onNewConfirm = { context.applyNewMachine(state, dialogs) },
+            onNewDismiss = {
+                dialogs.newPromptVisible = false
+                dialogs.newName = ""
+                dialogs.newNameError = null
+            },
         )
     }
 }
@@ -72,51 +121,60 @@ internal fun Context.openMachine(state: MachineListUiState, name: String) {
     startActivity(intent)
 }
 
-/** Long press → delete confirmation, with the running machine protected. */
-internal fun Context.confirmDelete(state: MachineListUiState, name: String) {
+/** Long press → raise the delete confirmation, with the running machine protected. */
+internal fun Context.askDelete(
+    state: MachineListUiState,
+    dialogs: HomeDialogsState,
+    name: String,
+) {
     if (!state.canOpen(name)) {
         toast(this, getString(R.string.exp_miuix_stop_first))
         return
     }
-    AlertDialog.Builder(this)
-        .setTitle(R.string.exp_miuix_delete_title)
-        .setMessage(getString(R.string.exp_miuix_delete_message, name))
-        .setPositiveButton(R.string.exp_miuix_delete_confirm) { _, _ ->
-            if (ExpUiBridge.deleteMachine(name)) {
-                state.reload()
-            } else {
-                toast(this, getString(R.string.exp_miuix_stop_first))
-            }
-        }
-        .setNegativeButton(R.string.exp_miuix_delete_cancel, null)
-        .show()
+    dialogs.pendingDelete = name
 }
 
-/** Bottom-bar "new" tab → name prompt, then create through the dispatcher. */
-internal fun Context.promptNewMachine(state: MachineListUiState) {
-    val input = EditText(this).apply {
-        hint = getString(R.string.exp_miuix_new_hint)
-        setSingleLine(true)
-    }
-    AlertDialog.Builder(this)
-        .setTitle(R.string.exp_miuix_new_title)
-        .setView(input)
-        .setPositiveButton(R.string.exp_miuix_new_create) { _, _ ->
-            val name = input.text.toString().trim().replace("\"", "")
-            when {
-                // The two rejections the legacy prompt shows, in the same order.
-                name.isEmpty() ->
-                    toast(this, getString(R.string.exp_miuix_new_name_required))
-                state.rows.any { row -> row.name == name } ->
-                    toast(this, getString(R.string.exp_miuix_new_name_taken))
-                ExpUiBridge.createMachine(name) ->
-                    state.reload()
-                else ->
-                    toast(this, getString(R.string.exp_miuix_new_name_taken))
-            }
+/** Runs the confirmed delete; returns false when the bridge refused. */
+internal fun Context.applyDelete(state: MachineListUiState, name: String): Boolean {
+    if (!ExpUiBridge.deleteMachine(name)) return false
+    state.reload()
+    return true
+}
+
+/** Bottom-bar "new" tab → raise the name prompt. */
+internal fun Context.showNewPrompt(dialogs: HomeDialogsState) {
+    dialogs.newName = ""
+    dialogs.newNameError = null
+    dialogs.newPromptVisible = true
+}
+
+/**
+ * Validates and applies the prompted name.
+ *
+ * The two rejections are the ones the legacy prompt showed, in the same order;
+ * they stay inside the dialog now instead of escaping to a toast, so the user
+ * does not lose what they typed.
+ */
+internal fun Context.applyNewMachine(state: MachineListUiState, dialogs: HomeDialogsState) {
+    val name = dialogs.newName.trim().replace("\"", "")
+    when {
+        name.isEmpty() -> {
+            dialogs.newNameError = getString(R.string.exp_miuix_new_name_required)
+            return
         }
-        .setNegativeButton(R.string.exp_miuix_delete_cancel, null)
-        .show()
+        state.rows.any { row -> row.name == name } -> {
+            dialogs.newNameError = getString(R.string.exp_miuix_new_name_taken)
+            return
+        }
+    }
+    if (!ExpUiBridge.createMachine(name)) {
+        dialogs.newNameError = getString(R.string.exp_miuix_new_name_taken)
+        return
+    }
+    dialogs.newPromptVisible = false
+    dialogs.newName = ""
+    dialogs.newNameError = null
+    state.reload()
 }
 
 /** Bottom-bar "settings" tab. */

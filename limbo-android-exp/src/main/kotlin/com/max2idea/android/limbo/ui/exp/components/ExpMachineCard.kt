@@ -1,6 +1,7 @@
 package com.max2idea.android.limbo.ui.exp.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,10 +21,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import com.max2idea.android.limbo.ui.exp.theme.expCardColors
 
 /**
  * The six soft accent colours the machine avatar cycles through.
@@ -85,13 +86,13 @@ fun ExpMachineCard(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .background(color = avatarColor, shape = RoundedCornerShape(12.dp)),
+                    .background(color = avatarColor, shape = RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = initial,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
                     color = Color.White,
                     maxLines = 1,
                 )
@@ -103,38 +104,49 @@ fun ExpMachineCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(
-                    text = name,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = name,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .basicMarquee(),
+                    )
+                    if (running) {
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    color = MiuixTheme.colorScheme.tertiaryContainer,
+                                    shape = RoundedCornerShape(999.dp),
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                text = runningLabel,
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onTertiaryContainer,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
                 Text(
                     text = meta,
                     fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     maxLines = 1,
                 )
             }
 
-            if (running) {
-                Box(
-                    modifier = Modifier
-                        .background(
-                            color = MiuixTheme.colorScheme.tertiaryContainer,
-                            shape = RoundedCornerShape(999.dp),
-                        )
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                ) {
-                    Text(
-                        text = runningLabel,
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onTertiaryContainer,
-                        maxLines = 1,
-                    )
-                }
-            } else {
+            if (!running) {
                 ChevronGlyph(
                     color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.25f),
                     size = 16.dp,
@@ -146,7 +158,7 @@ fun ExpMachineCard(
     when {
         onClick != null && onLongPress != null -> Card(
             modifier = modifier.fillMaxWidth(),
-            colors = CardDefaults.defaultColors(),
+            colors = expCardColors(),
             onClick = onClick,
             onLongPress = onLongPress,
             insideMargin = inside,
@@ -157,7 +169,7 @@ fun ExpMachineCard(
 
         onClick != null -> Card(
             modifier = modifier.fillMaxWidth(),
-            colors = CardDefaults.defaultColors(),
+            colors = expCardColors(),
             onClick = onClick,
             insideMargin = inside,
             showIndication = true,
@@ -167,7 +179,7 @@ fun ExpMachineCard(
 
         else -> Card(
             modifier = modifier.fillMaxWidth(),
-            colors = CardDefaults.defaultColors(),
+            colors = expCardColors(),
             insideMargin = inside,
             content = { content() },
         )

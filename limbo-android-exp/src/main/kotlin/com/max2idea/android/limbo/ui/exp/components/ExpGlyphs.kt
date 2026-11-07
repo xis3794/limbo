@@ -10,6 +10,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -136,6 +137,53 @@ fun StopGlyph(
             topLeft = Offset(w * 0.30f, h * 0.30f),
             size = Size(w * 0.40f, h * 0.40f),
             cornerRadius = CornerRadius(w * 0.06f),
+        )
+    }
+}
+
+/**
+ * Warning triangle with an exclamation mark.
+ *
+ * Spec §7: an idle status card must carry a warning glyph tinted with the
+ * warning colour instead of the neutral grey monitor, so the "nothing is
+ * running" state reads as a nudge rather than as plain information.
+ */
+@Composable
+fun WarningGlyph(
+    color: Color,
+    size: Dp = 24.dp,
+    stroke: Dp = 2.dp,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val triangle = Path().apply {
+            moveTo(w * 0.50f, h * 0.13f)
+            lineTo(w * 0.91f, h * 0.84f)
+            lineTo(w * 0.09f, h * 0.84f)
+            close()
+        }
+        drawPath(
+            path = triangle,
+            color = color,
+            style = Stroke(
+                width = stroke.toPx(),
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round,
+            ),
+        )
+        drawLine(
+            color = color,
+            start = Offset(w * 0.50f, h * 0.42f),
+            end = Offset(w * 0.50f, h * 0.62f),
+            strokeWidth = stroke.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawCircle(
+            color = color,
+            radius = stroke.toPx() * 0.62f,
+            center = Offset(w * 0.50f, h * 0.73f),
         )
     }
 }
