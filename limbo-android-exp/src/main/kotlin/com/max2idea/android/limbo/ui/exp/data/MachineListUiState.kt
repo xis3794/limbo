@@ -57,14 +57,26 @@ class MachineListUiState internal constructor(
         }
         runningName = ExpUiBridge.getRunningMachineName()
     }
+
+    /** Whether the row can be opened right now (Limbo runs one guest at a time). */
+    fun canOpen(name: String): Boolean = ExpUiBridge.canOpenMachine(name)
+
+    /** Refreshes after a create/delete round trip. */
+    fun reload() {
+        refresh()
+    }
 }
 
 /**
- * Remembers a [MachineListUiState] and, when it is backed by the real bridge,
- * reads the machine list once when it enters composition.
+ * Remembers a [MachineListUiState] and reads the machine list when it enters
+ * composition.
+ *
+ * [useSampleData] defaults to false so the shipped screen always shows the real
+ * machine database; it stays available so Compose previews and the visual review
+ * harness can render the layout without an Application context.
  */
 @Composable
-fun rememberMachineListUiState(useSampleData: Boolean = true): MachineListUiState {
+fun rememberMachineListUiState(useSampleData: Boolean = false): MachineListUiState {
     val state = remember(useSampleData) { MachineListUiState(useSampleData) }
     LaunchedEffect(state) { state.refresh() }
     return state

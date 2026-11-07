@@ -26,6 +26,19 @@
     <string name="exp_miuix_tab_new">新建</string>
     <string name="exp_miuix_tab_settings">设置</string>
 
+    <!-- Interaction strings (dialogs and toasts) -->
+    <string name="exp_miuix_stop_first">请先停止正在运行的虚拟机</string>
+    <string name="exp_miuix_no_target">找不到可以打开此虚拟机的界面</string>
+    <string name="exp_miuix_delete_title">删除虚拟机</string>
+    <string name="exp_miuix_delete_message">确定要删除「%1$s」吗？机器配置会被移除，磁盘文件保留。</string>
+    <string name="exp_miuix_delete_confirm">删除</string>
+    <string name="exp_miuix_delete_cancel">取消</string>
+    <string name="exp_miuix_new_title">新建虚拟机</string>
+    <string name="exp_miuix_new_hint">输入机器名称</string>
+    <string name="exp_miuix_new_create">创建</string>
+    <string name="exp_miuix_new_name_required">请输入机器名称</string>
+    <string name="exp_miuix_new_name_taken">这个名称已经被使用了</string>
+
     <!-- %1$s = arch, %2$d = cpu count, %3$d = memory in MB -->
     <string name="exp_miuix_machine_meta">%1$s · %2$d 核 · %3$d MB</string>
 </resources>

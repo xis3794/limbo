@@ -43,19 +43,21 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 private val BottomBarHeight = 64.dp
 
 /**
- * Static home screen for the experimental Miuix UI.
+ * Home screen for the experimental Miuix UI.
  *
  * Compares against `docs/team/npatch-miuix-style-spec.md`:
  * §2 top bar, §3 page padding, §4 status card, §5 the two-up counters and the
  * machine rows, §6 the floating bottom bar.
  *
- * The screen renders from [MachineListUiState]; the sample implementation of
- * that state (`useSampleData = true`) feeds the placeholder rows so the visuals
- * can be reviewed before the real machine database is wired in.
+ * All user actions are delegated to [actions] so the screen itself stays a pure
+ * function of its inputs and can be rendered in a preview.
  */
 @Composable
 fun HomeScreen(
     state: MachineListUiState,
+    actions: HomeActions,
+    onNewMachine: () -> Unit,
+    onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -106,6 +108,7 @@ fun HomeScreen(
                         titleRunning = stringResource(R.string.exp_miuix_status_running),
                         titleIdle = stringResource(R.string.exp_miuix_status_idle),
                         summaryIdle = stringResource(R.string.exp_miuix_status_idle_summary),
+                        onClick = actions.onStatusCardClick,
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                 }
@@ -148,6 +151,8 @@ fun HomeScreen(
                     items(state.rows, key = { row -> row.name }) { row ->
                         MachineRowItem(
                             row = row,
+                            onClick = { actions.onMachineClick(row.name) },
+                            onLongPress = { actions.onMachineLongClick(row.name) },
                             modifier = Modifier.padding(horizontal = 12.dp),
                         )
                     }
@@ -165,14 +170,39 @@ fun HomeScreen(
             ExpFloatingBottomBar(
                 tabs = tabs,
                 selectedIndex = selectedTab,
-                onSelected = { selectedTab = it },
+                onSelected = { index ->
+                    selectedTab = index
+                    when (index) {
+                        1 -> onNewMachine()
+                        2 -> onSettings()
+                        else -> Unit
+                    }
+                },
             )
         }
     }
 }
 
+/**
+ * The user actions the home screen can raise.
+ *
+ * Kept as an explicit value object (instead of passing callbacks down from the
+ * item rows) so the screen has one place where the side effects live and the
+ * composable stays testable.
+ */
+data class HomeActions(
+    val onStatusCardClick: () -> Unit,
+    val onMachineClick: (String) -> Unit,
+    val onMachineLongClick: (String) -> Unit,
+)
+
 @Composable
-private fun MachineRowItem(row: MachineRow, modifier: Modifier = Modifier) {
+private fun MachineRowItem(
+    row: MachineRow,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val unknownArch = stringResource(R.string.exp_miuix_unknown_arch)
     val unnamed = stringResource(R.string.exp_miuix_unnamed)
 
@@ -187,6 +217,8 @@ private fun MachineRowItem(row: MachineRow, modifier: Modifier = Modifier) {
         meta = meta,
         running = row.running,
         runningLabel = stringResource(R.string.exp_miuix_badge_running),
+        onClick = onClick,
+        onLongPress = onLongPress,
         modifier = modifier,
     )
 }

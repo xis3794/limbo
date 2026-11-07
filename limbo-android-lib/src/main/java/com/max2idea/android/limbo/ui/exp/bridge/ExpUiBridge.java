@@ -184,6 +184,86 @@ public final class ExpUiBridge {
     }
 
     /**
+     * Whether {@code name} can be opened from the machine list right now.
+     *
+     * <p>Limbo can only show one guest at a time, so opening a different machine
+     * while one is already running is refused by the legacy activity with a
+     * "stop the machine first" toast. The Compose screen asks here first so it can
+     * show the same message instead of silently doing nothing.
+     */
+    public static boolean canOpenMachine(String name) {
+        if (name == null) {
+            return false;
+        }
+        String running = getRunningMachineName();
+        return running == null || running.equals(name);
+    }
+
+    /**
+     * Creates a named machine through the same dispatcher action the legacy
+     * screen uses.
+     *
+     * <p>Returns {@code false} when the name is empty, already taken, or the
+     * dispatcher is not reachable yet; the caller shows its own message. The
+     * machine is created with the arch/CPU/memory defaults the legacy flow
+     * applies, because the Compose screen has no editor form yet.
+     */
+    public static boolean createMachine(String name) {
+        if (name == null) {
+            return false;
+        }
+        String trimmed = name.trim().replace("\"", "");
+        if (trimmed.isEmpty() || getMachineNames().contains(trimmed)) {
+            return false;
+        }
+        try {
+            com.max2idea.android.limbo.main.ViewListener listener =
+                    com.max2idea.android.limbo.main.LimboApplication.getViewListener();
+            if (listener == null) {
+                return false;
+            }
+            listener.onAction(
+                    com.max2idea.android.limbo.machine.MachineAction.CREATE_VM, trimmed);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Deletes a machine, refusing while it is the one that is running.
+     *
+     * <p>Same guard as the legacy long-press flow: deleting the running machine
+     * would pull the configuration out from under QEMU.
+     */
+    public static boolean deleteMachine(String name) {
+        if (name == null) {
+            return false;
+        }
+        String running = getRunningMachineName();
+        if (running != null && running.equals(name)) {
+            return false;
+        }
+        try {
+            com.max2idea.android.limbo.machine.Machine machine =
+                    com.max2idea.android.limbo.machine.MachineController.getInstance()
+                            .getMachineConfig(name);
+            if (machine == null) {
+                return false;
+            }
+            com.max2idea.android.limbo.main.ViewListener listener =
+                    com.max2idea.android.limbo.main.LimboApplication.getViewListener();
+            if (listener == null) {
+                return false;
+            }
+            listener.onAction(com.max2idea.android.limbo.machine.MachineAction.DELETE_VM, machine);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
      * Builds the intent that opens a machine in the legacy editor / VM display.
      *
      * <p>Deliberately mirrors what the existing experimental activity does: the
@@ -219,5 +299,73 @@ public final class ExpUiBridge {
             intent.putExtra(com.max2idea.android.limbo.main.LimboActivity.EXTRA_START, true);
         }
         return intent;
+    }
+
+    /**
+     * Builds the intent that returns to the display of the running machine.
+     *
+     * <p>Mirrors the legacy screen exactly: a VNC machine reopens the VNC client,
+     * a GTK machine the GTK host (only while the engine and the OS support it),
+     * everything else the SDL window. All three activities are declared in the
+     * library manifest, which is why this cannot be built on the Compose side —
+     * those classes are library-internal.
+     *
+     * <p>Returns {@code null} when nothing is running.
+     */
+    public static android.content.Intent createRunningDisplayIntent(
+            android.content.Context context) {
+        if (context == null) {
+            return null;
+        }
+        String runningName = getRunningMachineName();
+        if (runningName == null) {
+            return null;
+        }
+        String ui = null;
+        try {
+            com.max2idea.android.limbo.machine.Machine machine =
+                    com.max2idea.android.limbo.machine.MachineController.getInstance()
+                            .getMachineConfig(runningName);
+            if (machine != null) {
+                ui = com.max2idea.android.limbo.main.Config.normalizeUI(machine.getUI());
+            }
+        } catch (RuntimeException e) {
+            ui = null;
+        }
+        if (ui == null) {
+            try {
+                if (com.max2idea.android.limbo.machine.MachineController.getInstance()
+                        .isVNCEnabled()) {
+                    ui = com.max2idea.android.limbo.main.Config.UI_VNC;
+                }
+            } catch (RuntimeException e) {
+                ui = null;
+            }
+        }
+        Class<?> target;
+        if (com.max2idea.android.limbo.main.Config.UI_VNC.equals(ui)) {
+            target = com.max2idea.android.limbo.vnc.VncActivity.class;
+        } else if (com.max2idea.android.limbo.main.Config.UI_GTK.equals(ui)
+                && com.max2idea.android.limbo.main.LimboGtkActivity.isUsable()) {
+            target = com.max2idea.android.limbo.main.LimboGtkActivity.class;
+        } else {
+            target = com.max2idea.android.limbo.main.LimboSDLActivity.class;
+        }
+        return new android.content.Intent(context, target);
+    }
+
+    /**
+     * Builds the intent that opens the application settings screen.
+     *
+     * <p>The Compose module has no reference to the legacy settings activity, so
+     * the bridge hands it over pre-resolved.
+     */
+    public static android.content.Intent createSettingsIntent(
+            android.content.Context context) {
+        if (context == null) {
+            return null;
+        }
+        return new android.content.Intent(context,
+                com.max2idea.android.limbo.main.AppSettingsActivity.class);
     }
 }
