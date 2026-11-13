@@ -35,6 +35,25 @@ android {
         disable 'MissingTranslation'
     }
 
+    // Native libraries have to be extracted at install time.
+    //
+    // AGP 8+ defaults `extractNativeLibs` to false once minSdk >= 23: the .so
+    // stay inside the APK and ApplicationInfo.nativeLibraryDir is left empty.
+    // That breaks two things in this app:
+    //   * DisplayBackendProbe looks for libgtk-4.so / libvirglrenderer.so /
+    //     libepoxy.so in nativeLibraryDir to decide whether the engine can do
+    //     GTK and virgl. With an empty directory it concludes the feature is
+    //     missing and silently disables GTK, so the GTK display never starts.
+    //   * VMExecutor and FileUtils.getNativeLibDir() build absolute library
+    //     paths from the same directory.
+    // The APKs shipped before the AGP 9 migration (minSdk 21) were extracted,
+    // which is why they are ~30 MB zipped instead of ~37 MB.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     sourceSets {
         main {
             jniLibs.srcDirs = ['src/main/jniLibs']

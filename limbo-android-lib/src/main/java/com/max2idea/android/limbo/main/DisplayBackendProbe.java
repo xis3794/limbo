@@ -111,6 +111,51 @@ public final class DisplayBackendProbe {
         } catch (Throwable t) {
             Log.w(TAG, "applicationInfo check failed for " + name + ": " + t);
         }
+        // Last resort: read the APK's own zip entry list. A build with
+        // android:extractNativeLibs="false" keeps the .so inside the APK and
+        // leaves nativeLibraryDir empty, so both probes above come back empty
+        // even though the library does ship. Without this fallback the GTK and
+        // virgl flags would be silently forced off on such a build.
+        try {
+            String apk = context.getApplicationInfo().sourceDir;
+            if (apk != null) {
+                java.util.zip.ZipFile zip = new java.util.zip.ZipFile(apk);
+                try {
+                    java.util.zip.ZipEntry entry = zip.getEntry("lib/" + apkAbi() + "/" + name);
+                    if (entry == null) {
+                        // A split APK or an ABI folder we did not guess: accept
+                        // any ABI that carries the library.
+                        java.util.Enumeration<? extends java.util.zip.ZipEntry> all =
+                                zip.entries();
+                        while (all.hasMoreElements()) {
+                            java.util.zip.ZipEntry e = all.nextElement();
+                            String n = e.getName();
+                            if (n.startsWith("lib/") && n.endsWith("/" + name)) {
+                                return true;
+                            }
+                        }
+                    } else {
+                        return true;
+                    }
+                } finally {
+                    zip.close();
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "apk entry check failed for " + name + ": " + t);
+        }
         return false;
+    }
+
+    /** The ABI folder this device would load from, e.g. {@code arm64-v8a}. */
+    private static String apkAbi() {
+        try {
+            String[] abis = android.os.Build.SUPPORTED_ABIS;
+            if (abis != null && abis.length > 0 && abis[0] != null) {
+                return abis[0];
+            }
+        } catch (Throwable ignored) {
+        }
+        return android.os.Build.CPU_ABI;
     }
 }
